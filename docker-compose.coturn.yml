@@ -1,0 +1,20 @@
+services:
+  coturn:
+    image: coturn/coturn:4.6.2
+    container_name: autohr-coturn
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}:${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}/udp"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        private_ip="$${TURN_DOCKER_PRIVATE_IP:-$$(hostname -i | awk '{print $$1}')}"
+        exec turnserver -c /etc/coturn/turnserver.conf \
+          --external-ip="$${TURN_EXTERNAL_IP:?TURN_EXTERNAL_IP must be set in .env}/$${private_ip}" \
+          --static-auth-secret="$${INTERVIEW_TURN_SHARED_SECRET:?INTERVIEW_TURN_SHARED_SECRET must be set in .env}"

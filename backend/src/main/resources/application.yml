@@ -1,0 +1,113 @@
+server:
+  port: 8080
+
+# File-backed branding and public content. Override these paths in each deployment so
+# changing the JVM working directory cannot silently change or lose site data.
+site-settings:
+  path: ${SITE_SETTINGS_PATH:.site-settings.json}
+site-content:
+  path: ${SITE_CONTENT_PATH:.site-content.json}
+
+spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+  application:
+    name: auto-hr-system
+  profiles:
+    active: dev
+  sql:
+    init:
+      mode: never
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 105MB
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+      timeout: ${REDIS_TIMEOUT:3s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.autohr.modules.**.entity
+  global-config:
+    db-config:
+      id-type: auto
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:7200000}
+  header: Authorization
+
+security:
+  config-encryption-key: ${CONFIG_ENCRYPTION_KEY:${JWT_SECRET}}
+
+auth:
+  session-cookie:
+    name: ${AUTH_SESSION_COOKIE_NAME:AUTOHR_SESSION}
+    secure: ${AUTH_SESSION_COOKIE_SECURE:true}
+    same-site: ${AUTH_SESSION_COOKIE_SAME_SITE:Lax}
+    max-age-ms: ${AUTH_SESSION_COOKIE_MAX_AGE_MS:${JWT_EXPIRATION:7200000}}
+  csrf-cookie:
+    name: ${AUTH_CSRF_COOKIE_NAME:AUTOHR_CSRF}
+    header: ${AUTH_CSRF_HEADER:X-CSRF-Token}
+    secure: ${AUTH_CSRF_COOKIE_SECURE:${AUTH_SESSION_COOKIE_SECURE:true}}
+    same-site: ${AUTH_CSRF_COOKIE_SAME_SITE:${AUTH_SESSION_COOKIE_SAME_SITE:Lax}}
+  security:
+    redis-key-prefix: ${AUTH_REDIS_KEY_PREFIX:autohr:auth}
+    trust-forwarded-headers: ${AUTH_TRUST_FORWARDED_HEADERS:false}
+    rate-limit:
+      window-seconds: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:60}
+      login-per-ip: ${AUTH_LOGIN_RATE_LIMIT_PER_IP:10}
+      login-per-username: ${AUTH_LOGIN_RATE_LIMIT_PER_USERNAME:10}
+      captcha-per-ip: ${AUTH_CAPTCHA_RATE_LIMIT_PER_IP:30}
+      verification-per-ip: ${AUTH_VERIFICATION_RATE_LIMIT_PER_IP:5}
+      verification-per-target: ${AUTH_VERIFICATION_RATE_LIMIT_PER_TARGET:3}
+
+interview:
+  llm:
+    debug: false
+    allow-private-addresses: ${LLM_ALLOW_PRIVATE_ADDRESSES:false}
+  security:
+    disable-devtools-shortcuts: ${INTERVIEW_DISABLE_DEVTOOLS_SHORTCUTS:true}
+  webrtc:
+    stun-urls: ${INTERVIEW_STUN_URLS:stun:stun.l.google.com:19302,stun:stun.cloudflare.com:3478}
+    turn-urls: ${INTERVIEW_TURN_URLS:}
+    turn-shared-secret: ${INTERVIEW_TURN_SHARED_SECRET:}
+    turn-credential-ttl-seconds: ${INTERVIEW_TURN_CREDENTIAL_TTL_SECONDS:3600}
+  video:
+    ffmpeg-path: ${INTERVIEW_VIDEO_FFMPEG_PATH:${FFMPEG_PATH:ffmpeg}}
+    video-codec: ${INTERVIEW_VIDEO_VIDEO_CODEC:libvpx-vp9}
+    audio-codec: ${INTERVIEW_VIDEO_AUDIO_CODEC:libopus}
+    inactive-timeout-minutes: ${INTERVIEW_VIDEO_INACTIVE_TIMEOUT_MINUTES:30}
+    inactive-scan-interval-ms: ${INTERVIEW_VIDEO_INACTIVE_SCAN_INTERVAL_MS:60000}
+    missing-recording-scan-interval-ms: ${INTERVIEW_VIDEO_MISSING_RECORDING_SCAN_INTERVAL_MS:60000}
+
+resume:
+  ocr:
+    enabled: ${RESUME_OCR_ENABLED:true}
+    tesseract-path: ${RESUME_OCR_TESSERACT_PATH:${TESSERACT_PATH:tesseract}}
+    language: ${RESUME_OCR_LANGUAGE:chi_sim+eng}
+    dpi: ${RESUME_OCR_DPI:200}
+    max-pages: ${RESUME_OCR_MAX_PAGES:5}
+
+app:
+  database:
+    type: ${DB_TYPE:sqlite}
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:autohr.db}
+    fallback-enabled: ${DB_FALLBACK_ENABLED:true}
+  migration:
+    enabled: ${MIGRATION_ENABLED:true}

@@ -1,0 +1,18 @@
+app:
+  database:
+    type: sqlite
+    url: jdbc:sqlite:autohr-test.db
+    fallback-enabled: false
+
+jwt:
+  secret: AUTOHR_TEST_ONLY_JWT_SECRET_WITH_AT_LEAST_32_CHARACTERS
+
+auth:
+  session-cookie:
+    secure: false
+  csrf-cookie:
+    secure: false
+
+logging:
+  level:
+    com.autohr: debug

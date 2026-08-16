@@ -1,0 +1,13 @@
+app:
+  database:
+    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:autohr-dev.db}
+
+auth:
+  session-cookie:
+    secure: ${AUTH_SESSION_COOKIE_SECURE:false}
+  csrf-cookie:
+    secure: ${AUTH_CSRF_COOKIE_SECURE:false}
+
+logging:
+  level:
+    com.autohr: debug

@@ -1,0 +1,47 @@
+# Java
+*.class
+*.jar
+*.war
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node
+node_modules/
+dist/
+.npm/
+*.local
+*.pid
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# DB
+*.db
+*.db-journal
+
+# Env
+.env
+.env.local
+.env.*
+!.env.example
+.site-content.json
+.site-settings.json
+*.log
+/backend/uploads/resumes
+/backend/uploads
+/backend/runtime/
+/logs/
+/backups/
+backend/LLM.txt
+release/
+requirement.md

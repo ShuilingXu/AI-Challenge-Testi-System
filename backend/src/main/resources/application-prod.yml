@@ -1,0 +1,11 @@
+logging:
+  level:
+    com.autohr: info
+
+jwt:
+  secret: ${JWT_SECRET}
+
+app:
+  database:
+    type: ${DB_TYPE}
+    fallback-enabled: ${DB_FALLBACK_ENABLED:false}
