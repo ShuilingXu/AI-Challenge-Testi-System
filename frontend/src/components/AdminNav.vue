@@ -34,6 +34,7 @@ const visibleItems = computed(() => {
     { label: '学生管理', to: '/admin/students' },
     { label: '知识库与模板', to: '/admin/knowledge' },
     { label: '得分分析', to: '/admin/analytics' },
+    ...(sessionUser.value?.roleCode === 'IT_ADMIN' ? [{ label: '系统配置', to: '/admin/settings' }] : []),
   ]
 })
 

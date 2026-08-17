@@ -27,11 +27,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -136,6 +138,8 @@ class SchoolExamServiceTest {
     void registrationBindsAnIntervieweeAccountAndRejectsDifferentRosterDetails() {
         jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
                 "Computer Science", "Class 1", "CS-1");
+        jdbc.update("INSERT INTO school_student(student_no,full_name,class_id,status) VALUES(?,?,?,1)",
+                "2026001", "Ada", 1L);
         doAnswer(invocation -> {
             SysUser user = invocation.getArgument(0);
             user.setId(88L);
@@ -155,6 +159,18 @@ class SchoolExamServiceTest {
         assertEquals("INTERVIEWEE", user.getValue().getRoleCode());
 
         assertThrows(BusinessException.class, () -> service.registerStudent(registration("2026001", "Grace", 1L)));
+    }
+
+    @Test
+    void registrationRejectsUnknownStudentsWithoutCreatingRosterRecords() {
+        jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
+                "Computer Science", "Class 1", "CS-1");
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.registerStudent(registration("2026999", "Unknown", 1L)));
+
+        assertTrue(error.getMessage().contains("未找到学生档案"));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM school_student", Integer.class));
     }
 
     @Test
@@ -179,7 +195,20 @@ class SchoolExamServiceTest {
     }
 
     @Test
-    void classAnalyticsExcludesInProgressAttempts() {
+    void listingStudentAttemptsCalculatesAnalysisWithoutUpdatingTheAttempt() {
+        seedCompletedAttempt();
+        jdbc.update("INSERT INTO interview_ai_record(process_id,knowledge_point,question_content,question_status,answer_status,average_score,sequence_no) "
+                        + "VALUES(?,?,?,?,?,?,?)", 41L, "Java", "Question 1", "READY", "COMPLETED", 80, 1);
+
+        List<Map<String, Object>> attempts = service.listStudentAttempts(88L);
+
+        assertEquals(80, attempts.get(0).get("scoreRate"));
+        assertNull(jdbc.queryForObject("SELECT score_rate FROM school_exam_attempt WHERE process_id=?", Integer.class, 41L));
+        assertNull(jdbc.queryForObject("SELECT submitted_at FROM school_exam_attempt WHERE process_id=?", String.class, 41L));
+    }
+
+    @Test
+    void classAnalyticsKeepsInProgressAttemptsVisibleWithoutUsingThemInScoreAggregates() {
         seedCompletedAttempt();
         jdbc.update("INSERT INTO interview_ai_record(process_id,knowledge_point,question_content,question_status,answer_status,average_score,sequence_no) "
                         + "VALUES(?,?,?,?,?,?,?)", 41L, "Java", "Question 1", "READY", "COMPLETED", 80, 1);
@@ -195,10 +224,41 @@ class SchoolExamServiceTest {
 
         Map<String, Object> analytics = service.analytics(31L, 1L);
 
-        assertEquals(1, analytics.get("studentCount"));
+        assertEquals(2, analytics.get("studentCount"));
+        assertEquals(1, analytics.get("completedStudentCount"));
         assertEquals(80, analytics.get("scoreRate"));
         assertEquals(20, analytics.get("lossRate"));
-        assertEquals(1, rows(analytics.get("students")).size());
+        assertEquals(2, rows(analytics.get("students")).size());
+    }
+
+    @Test
+    void listsPublishedExamWhenLocalDateTimeValuesUseIsoTSeparator() {
+        seedStartableExam(60);
+        jdbc.update("UPDATE school_exam SET publish_start=?,publish_end=? WHERE id=?",
+                LocalDateTime.now().minusMinutes(1).withNano(0).toString(),
+                LocalDateTime.now().plusMinutes(1).withNano(0).toString(), 31L);
+
+        List<Map<String, Object>> exams = service.listStudentExams(88L);
+
+        assertEquals(1, exams.size());
+        assertEquals(31L, ((Number) exams.get(0).get("id")).longValue());
+    }
+
+    @Test
+    void adminAttemptDetailsIncludesQuestionsAnswersAndScores() {
+        seedCompletedAttempt();
+        jdbc.update("INSERT INTO interview_ai_record(process_id,knowledge_point,question_content,question_status,answer_content,answer_status,interviewer_score,scorer_score,average_score,interviewer_comment,sequence_no) "
+                        + "VALUES(?,?,?,?,?,?,?,?,?,?,?)", 41L, "Java", "Question 1", "READY", "My answer", "COMPLETED", 82, 78, 80, "Good explanation", 1);
+
+        Map<String, Object> details = service.adminAttemptDetails(41L);
+
+        assertEquals("Ada", details.get("fullName"));
+        assertEquals(1L, details.get("answeredRounds"));
+        List<Map<String, Object>> records = rows(details.get("records"));
+        assertEquals(1, records.size());
+        assertEquals("Question 1", records.get(0).get("questionContent"));
+        assertEquals("My answer", records.get(0).get("answerContent"));
+        assertEquals(80, records.get(0).get("averageScore"));
     }
 
     @Test

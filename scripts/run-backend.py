@@ -11,8 +11,6 @@ env_path = project_root / ".env"
 target_dir = project_root / "backend" / "target"
 jar_files = sorted(path for path in target_dir.glob("*.jar") if not path.name.endswith(".original"))
 
-if not env_path.is_file():
-    raise SystemExit(f"Missing environment file: {env_path}")
 if len(jar_files) != 1:
     found = ", ".join(path.name for path in jar_files) or "none"
     raise SystemExit(f"Expected exactly one backend JAR in {target_dir}; found: {found}")

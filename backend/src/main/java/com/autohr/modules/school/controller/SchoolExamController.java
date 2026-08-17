@@ -97,6 +97,11 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.analytics(examId, classId));
     }
 
+    @GetMapping("/admin/attempts/{processId}")
+    public ApiResponse<Map<String, Object>> adminAttemptDetails(@PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.adminAttemptDetails(processId));
+    }
+
     @GetMapping("/student/exams")
     public ApiResponse<List<Map<String, Object>>> studentExams(Authentication authentication) {
         return ApiResponse.success(schoolExamService.listStudentExams(current(authentication).getId()));

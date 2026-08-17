@@ -153,7 +153,7 @@ class InterviewServiceImplTest {
     }
 
     @Test
-    void completesSchoolExamAfterItsFinalConfiguredAiRoundWithoutApproval() {
+    void rejectsSchoolExamAfterItsFinalConfiguredAiRoundWhenBelowPassingScore() {
         InterviewProcess process = new InterviewProcess();
         process.setId(42L);
         process.setRecruitmentCandidateId(7L);
@@ -169,6 +169,7 @@ class InterviewServiceImplTest {
         stage.setProcessId(42L);
         stage.setStageType("AI");
         stage.setStageName("AI 答题");
+        stage.setSequenceNo(1);
         stage.setStageStatus("IN_PROGRESS");
 
         InterviewAiRecord answer = new InterviewAiRecord();
@@ -183,18 +184,78 @@ class InterviewServiceImplTest {
         student.setApplicationStatus("INTERVIEWING");
         student.setGraduationSchool("学校考试系统");
 
-        when(processStageMapper.selectOne(ArgumentMatchers.<Wrapper<InterviewProcessStage>>any())).thenReturn(stage);
+        when(processStageMapper.selectOne(ArgumentMatchers.<Wrapper<InterviewProcessStage>>any())).thenReturn(stage, null);
         when(aiRecordMapper.selectList(ArgumentMatchers.<Wrapper<InterviewAiRecord>>any())).thenReturn(List.of(answer));
         when(recruitmentCandidateMapper.selectById(7L)).thenReturn(student);
 
         ReflectionTestUtils.invokeMethod(service, "completeTemplateAiAnswer", process, answer, null);
 
-        assertEquals("COMPLETED", process.getOverallStatus());
-        assertEquals("PASSED", process.getStageStatus());
-        assertEquals("考试已完成", process.getProcessStatusView());
-        assertEquals("PASSED", stage.getStageStatus());
-        assertEquals("EXAM_COMPLETED", student.getApplicationStatus());
+        assertEquals("REJECTED", process.getOverallStatus());
+        assertEquals("REJECTED", process.getStageStatus());
+        assertEquals("AI 答题未通过", process.getProcessStatusView());
+        assertEquals("REJECTED", stage.getStageStatus());
+        assertEquals("REJECTED", student.getApplicationStatus());
         verify(processStageMapper).updateById(stage);
+        verify(processMapper).updateById(process);
+    }
+
+    @Test
+    void advancesSchoolExamToTheNextAiStageAfterACompletedRound() {
+        InterviewProcess process = new InterviewProcess();
+        process.setId(42L);
+        process.setTemplateId(99L);
+        process.setRecruitmentCandidateId(7L);
+        process.setOverallStatus("IN_PROGRESS");
+        process.setCurrentStage("AI");
+        process.setStageStatus("IN_PROGRESS");
+        process.setAiMinQuestionRounds(1);
+        process.setAiMaxQuestionRounds(1);
+        process.setAiThresholdScore(60);
+
+        InterviewProcessStage firstStage = new InterviewProcessStage();
+        firstStage.setId(8L);
+        firstStage.setProcessId(42L);
+        firstStage.setStageType("AI");
+        firstStage.setStageName("基础知识");
+        firstStage.setSequenceNo(1);
+        firstStage.setStageStatus("IN_PROGRESS");
+
+        InterviewProcessStage nextStage = new InterviewProcessStage();
+        nextStage.setId(9L);
+        nextStage.setProcessId(42L);
+        nextStage.setStageType("AI");
+        nextStage.setStageName("综合能力");
+        nextStage.setSequenceNo(2);
+        nextStage.setStageStatus("PENDING");
+
+        InterviewAiRecord answer = new InterviewAiRecord();
+        answer.setId(10L);
+        answer.setProcessId(42L);
+        answer.setProcessStageId(8L);
+        answer.setAnswerStatus("COMPLETED");
+        answer.setAverageScore(85);
+
+        RecruitmentCandidate student = new RecruitmentCandidate();
+        student.setId(7L);
+        student.setApplicationStatus("INTERVIEWING");
+        student.setGraduationSchool("学校考试系统");
+
+        when(processStageMapper.selectOne(ArgumentMatchers.<Wrapper<InterviewProcessStage>>any()))
+                .thenReturn(firstStage, nextStage);
+        when(aiRecordMapper.selectList(ArgumentMatchers.<Wrapper<InterviewAiRecord>>any()))
+                .thenReturn(List.of(answer));
+        when(recruitmentCandidateMapper.selectById(7L)).thenReturn(student);
+
+        ReflectionTestUtils.invokeMethod(service, "completeTemplateAiAnswer", process, answer, null);
+
+        assertEquals("IN_PROGRESS", process.getOverallStatus());
+        assertEquals("AI", process.getCurrentStage());
+        assertEquals("IN_PROGRESS", process.getStageStatus());
+        assertEquals("综合能力", process.getProcessStatusView());
+        assertEquals("PASSED", firstStage.getStageStatus());
+        assertEquals("IN_PROGRESS", nextStage.getStageStatus());
+        verify(processStageMapper).updateById(firstStage);
+        verify(processStageMapper).updateById(nextStage);
         verify(processMapper).updateById(process);
     }
 

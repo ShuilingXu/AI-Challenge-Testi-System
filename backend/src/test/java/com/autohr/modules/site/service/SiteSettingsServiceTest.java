@@ -23,10 +23,10 @@ class SiteSettingsServiceTest {
 
         SiteSettings settings = service.get();
 
-        assertEquals("AI School Examination System", settings.siteTitle());
-        assertEquals("Class-based AI examinations and learning analytics.", settings.siteSubtitle());
+        assertEquals("人工智能考试系统", settings.siteTitle());
+        assertEquals("按班级组织人工智能考试与学情分析。", settings.siteSubtitle());
         assertEquals("", settings.logoUrl());
-        assertEquals("AI School Examination System", settings.footerHtml());
+        assertEquals("人工智能考试系统", settings.footerHtml());
     }
 
     @Test
@@ -58,8 +58,8 @@ class SiteSettingsServiceTest {
         SiteSettings saved = service.save(new SiteSettings("javascript:alert(1)", " ", null, "<b>plain text</b>"));
 
         assertEquals("", saved.logoUrl());
-        assertEquals("AI School Examination System", saved.siteTitle());
-        assertEquals("Class-based AI examinations and learning analytics.", saved.siteSubtitle());
+        assertEquals("人工智能考试系统", saved.siteTitle());
+        assertEquals("按班级组织人工智能考试与学情分析。", saved.siteSubtitle());
         assertEquals("<b>plain text</b>", saved.footerHtml());
 
         SiteSettings backslashPath = service.save(new SiteSettings(

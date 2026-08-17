@@ -97,86 +97,6 @@ async function requestPage(path, params) {
   return { ...response, data: items, pagination: { ...pagination, loaded: items.length } }
 }
 
-async function requestAllPages(path, params) {
-  const first = await requestPage(path, { ...params, page: 1, pageSize: 200 })
-  const items = [...first.data]
-  const total = first.pagination?.total ?? items.length
-  let page = 2
-  while (items.length < total) {
-    const next = await requestPage(path, { ...params, page, pageSize: 200 })
-    if (!next.data.length) break
-    items.push(...next.data)
-    page += 1
-  }
-  return { ...first, data: items, pagination: { ...first.pagination, loaded: items.length } }
-}
-
-export const hrApi = {
-  getDashboard() { return request.get('/hr/dashboard') },
-  listDepartments(params) { return requestPage('/hr/departments', params) },
-  listAllDepartments(params) { return requestAllPages('/hr/departments', params) },
-  saveDepartment(payload) { return request.post('/hr/departments', payload) },
-  deleteDepartment(id) { return request.delete(`/hr/departments/${id}`) },
-  listEmployees(params) { return requestPage('/hr/employees', params) },
-  listAllEmployees(params) { return requestAllPages('/hr/employees', params) },
-  getEmployee(id) { return request.get(`/hr/employees/${id}`) },
-  saveEmployee(payload) { return request.post('/hr/employees', payload) },
-  deleteEmployee(id) { return request.delete(`/hr/employees/${id}`) },
-  employeeTemplate() { return request.get('/hr/employees/template', { responseType: 'blob' }) },
-  importEmployees(file) { const form = new FormData(); form.append('file', file); return request.post('/hr/employees/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
-  statistics(month, signal) { return request.get('/hr/statistics', { params: { month }, signal }) },
-  getDashboardConfig() { return request.get('/hr/dashboard/config') },
-  saveDashboardConfig(configJson) { return request.post('/hr/dashboard/config', { configJson }) },
-}
-
-export const payrollApi = {
-  savePerformance(payload) { return request.post('/hr/payroll/performance', payload) },
-  saveOvertime(payload) { return request.post('/hr/payroll/overtime', payload) },
-  saveSocialInsurance(payload) { return request.post('/hr/payroll/social-insurance', payload) },
-  saveSpecialDeduction(payload) { return request.post('/hr/payroll/special-deductions', payload) },
-  generate(payload) { return request.post('/hr/payroll/generate', payload) },
-  list(params) { return request.get('/hr/payroll', { params }) },
-  listInputs(kind, params) { return request.get(`/hr/payroll/inputs/${kind}`, { params }) },
-  deleteInput(kind, employeeId, salaryMonth) { return request.delete(`/hr/payroll/inputs/${kind}/${employeeId}/${salaryMonth}`) },
-  lock(employeeId, salaryMonth) { return request.post(`/hr/payroll/${employeeId}/${salaryMonth}/lock`) },
-  unlock(employeeId, salaryMonth) { return request.post(`/hr/payroll/${employeeId}/${salaryMonth}/unlock`) },
-  deletePayroll(employeeId, salaryMonth) { return request.delete(`/hr/payroll/${employeeId}/${salaryMonth}`) },
-  import(kind, file) { const form = new FormData(); form.append('file', file); return request.post(`/hr/payroll/${kind}/import`, form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
-  export(params) { return request.get('/hr/payroll/export', { params, responseType: 'blob' }) },
-}
-
-export function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-export const recruitmentApi = {
-  saveJob(payload) { return request.post('/recruitment/admin/jobs', payload) },
-  listAdminJobs(params) { return requestPage('/recruitment/admin/jobs', params) },
-  listAllAdminJobs(params) { return requestAllPages('/recruitment/admin/jobs', params) },
-  deleteJob(id) { return request.delete(`/recruitment/admin/jobs/${id}`) },
-  listCandidates(params) { return requestPage('/recruitment/admin/candidates', params) },
-  getCandidate(id) { return request.get(`/recruitment/admin/candidates/${id}`) },
-  rejectCandidateResume(id) { return request.post(`/recruitment/admin/candidates/${id}/reject-resume`) },
-  reevaluateResumeLlm(id) { return request.post(`/recruitment/admin/candidates/${id}/reevaluate-resume-llm`) },
-  deleteCandidate(id) { return request.delete(`/recruitment/admin/candidates/${id}`) },
-  listOpenJobs(params) { return requestPage('/recruitment/jobs', params) },
-  apply(payload) { return request.post('/recruitment/candidates', payload) },
-  listMyCandidates(params) { return requestPage('/recruitment/candidates/mine', params) },
-  uploadResume(candidateId, file) {
-    const formData = new FormData()
-    formData.append('file', file)
-    return request.post(`/recruitment/candidates/${candidateId}/resume`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  },
-  openResume(id) { return openAuthorizedFile(`/api/recruitment/resumes/${id}`) },
-}
-
 export const authApi = {
   getCaptcha() { return request.get('/auth/captcha') },
   login(payload) { return request.post('/auth/login', payload) },
@@ -210,6 +130,7 @@ export const schoolApi = {
   listAdminExams() { return request.get('/exams/admin/exams') },
   saveExam(payload) { return request.post('/exams/admin/exams', payload) },
   analytics(params) { return request.get('/exams/admin/analytics', { params }) },
+  getAdminAttempt(processId) { return request.get(`/exams/admin/attempts/${processId}`) },
   listStudentExams() { return request.get('/exams/student/exams') },
   startExam(examId) { return request.post(`/exams/student/exams/${examId}/start`) },
   listStudentAttempts() { return request.get('/exams/student/attempts') },
@@ -254,9 +175,6 @@ export const interviewApi = {
   saveJobKnowledgeWeight(payload) { return request.post('/interview/hr/job-knowledge-weights', payload) },
   listJobKnowledgeWeights(params) { return requestPage('/interview/hr/job-knowledge-weights', params) },
   deleteJobKnowledgeWeight(id) { return request.post(`/interview/hr/job-knowledge-weights/${id}/delete`) },
-  saveLlmConfig(payload) { return request.post('/interview/it/llm-configs', payload) },
-  listLlmConfigs(params) { return requestPage('/interview/it/llm-configs', params) },
-  deleteLlmConfig(id) { return request.post(`/interview/it/llm-configs/${id}/delete`) },
   saveProcessTemplate(payload) { return request.post('/interview/hr/process-templates', payload) },
   listProcessTemplates(params) { return requestPage('/interview/hr/process-templates', params) },
   getProcessTemplate(id) { return request.get(`/interview/hr/process-templates/${id}`) },

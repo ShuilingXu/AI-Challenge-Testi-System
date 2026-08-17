@@ -32,17 +32,13 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
     private static final long POSTGRES_MIGRATION_LOCK_ID = 4_154_857_282_026L;
     private static final String MYSQL_MIGRATION_LOCK_NAME = "autohr_schema_migration";
     private static final List<String> PRIMARY_KEY_TABLES = List.of(
-            "hr_department", "hr_employee", "hr_integration_binding",
-            "recruitment_job", "recruitment_candidate", "recruitment_resume_file",
+            "recruitment_job", "recruitment_candidate",
             "interview_batch", "interview_question", "interview_candidate", "interview_submission",
             "sys_user", "sys_audit_log",
             "interview_knowledge_base", "interview_knowledge_item", "interview_job_knowledge_weight",
             "interview_llm_config", "interview_process", "interview_ai_record", "interview_video_session",
             "interview_process_template", "interview_process_template_stage", "interview_process_stage"
             , "school_class", "school_student", "school_exam", "school_exam_attempt"
-            , "hr_salary_history", "hr_performance_month", "hr_overtime_month",
-            "hr_social_insurance_month", "hr_special_deduction_month", "hr_payroll_month",
-            "user_dashboard_config"
     );
 
     private final DataSource dataSource;
@@ -65,6 +61,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         try (Connection connection = dataSource.getConnection()) {
             acquireMigrationLock(connection);
             try (Statement statement = connection.createStatement()) {
+                retireLegacyHrData(statement);
                 for (String sql : statements.stream().filter(sql -> !isCreateIndex(sql)).toList()) {
                     execute(statement, sql);
                 }
@@ -73,11 +70,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 migrateInterviewAiRecordColumns(connection, statement);
                 migrateInterviewVideoSessionColumns(connection, statement);
                 migrateInterviewProcessStageColumns(connection, statement);
-                migrateRecruitmentCandidateColumns(connection, statement);
-                migrateRecruitmentJobColumns(connection, statement);
-                migrateHrEmployeeColumns(connection, statement);
                 migrateInterviewLlmConfigColumns(connection, statement);
-                migratePayrollNumericColumns(connection, statement);
                 migrateSysUserColumns(connection, statement);
                 migrateReferentialIntegrityConstraints(connection, statement);
                 assertNoDuplicateBusinessKeys(statement);
@@ -152,6 +145,32 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                     || messageContains(ex, "duplicate column");
         }
         return false;
+    }
+
+    /** Payroll and employee records belong to the retired HR product, never to school exams. */
+    private void retireLegacyHrData(Statement statement) throws SQLException {
+        try {
+            statement.executeUpdate("DELETE FROM recruitment_resume_file");
+            statement.executeUpdate("UPDATE recruitment_candidate SET id_card_no=NULL, email=NULL, expected_salary=NULL, "
+                    + "self_introduction=NULL, resume_file_id=NULL, resume_llm_score=NULL, resume_llm_comment=NULL, "
+                    + "resume_llm_status=NULL, resume_llm_evaluated_at=NULL");
+        } catch (SQLException ignored) {
+            // Fresh examination schema has already removed recruitment-only columns and tables.
+        }
+        for (String table : List.of("hr_payroll_month", "hr_special_deduction_month", "hr_social_insurance_month",
+                "hr_overtime_month", "hr_performance_month", "hr_salary_history", "hr_integration_binding")) {
+            statement.executeUpdate("DROP TABLE IF EXISTS " + table);
+        }
+        try {
+            statement.executeUpdate("UPDATE hr_department SET manager_employee_id=NULL");
+        } catch (SQLException ignored) {
+            // New examination-only databases no longer contain an HR department table.
+        }
+        try {
+            statement.executeUpdate("DELETE FROM hr_employee");
+        } catch (SQLException ignored) {
+            // The table is absent for new databases; its historical rows are removed when present.
+        }
     }
 
     private boolean isCreateIndex(String sql) {
@@ -386,21 +405,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
     private void migrateReferentialIntegrityConstraints(Connection connection, Statement statement) throws SQLException {
         if (activeDatabase.type() == DatabaseType.SQLITE) {
-            rebuildSqliteEmployeeTableForJobForeignKey(connection, statement);
             return;
         }
-        ensureForeignKey(connection, statement, "fk_hr_employee_manager", "hr_employee", "manager_employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_hr_employee_job", "hr_employee", "job_id", "recruitment_job");
-        ensureForeignKey(connection, statement, "fk_hr_department_parent", "hr_department", "parent_department_id", "hr_department");
-        ensureForeignKey(connection, statement, "fk_hr_department_manager", "hr_department", "manager_employee_id", "hr_employee");
-        ensureEmployeeSourceCandidateForeignKey(connection, statement);
-        ensureForeignKey(connection, statement, "fk_binding_employee", "hr_integration_binding", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_salary_history_employee", "hr_salary_history", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_performance_employee", "hr_performance_month", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_overtime_employee", "hr_overtime_month", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_social_insurance_employee", "hr_social_insurance_month", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_special_deduction_employee", "hr_special_deduction_month", "employee_id", "hr_employee");
-        ensureForeignKey(connection, statement, "fk_payroll_employee", "hr_payroll_month", "employee_id", "hr_employee");
         ensureForeignKey(connection, statement, "fk_candidate_interviewee_user", "recruitment_candidate", "interviewee_user_id", "sys_user");
         ensureForeignKey(connection, statement, "fk_process_candidate", "interview_process", "recruitment_candidate_id", "recruitment_candidate");
         ensureForeignKey(connection, statement, "fk_process_interviewee_user", "interview_process", "interviewee_user_id", "sys_user");
@@ -622,8 +628,6 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 "interviewee_user_id IS NOT NULL", "candidate applications for one job and interviewee");
         assertNoDuplicateBusinessKey(statement, "interview_process", "recruitment_candidate_id",
                 "recruitment_candidate_id IS NOT NULL", "interview processes for one candidate");
-        assertNoDuplicateBusinessKey(statement, "hr_employee", "source_candidate_id",
-                "source_candidate_id IS NOT NULL", "employees generated from one candidate");
         assertNoDuplicateBusinessKey(statement, "interview_ai_record", "process_id, stage_scope_id, sequence_no",
                 "sequence_no IS NOT NULL", "AI questions with one process stage and sequence number");
     }

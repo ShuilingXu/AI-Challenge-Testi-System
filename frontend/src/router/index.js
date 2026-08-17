@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import ForcePasswordChangeView from '../views/ForcePasswordChangeView.vue'
 import SchoolAdminView from '../views/SchoolAdminView.vue'
+import SystemConfigView from '../views/SystemConfigView.vue'
 import KnowledgeTemplateView from '../views/KnowledgeTemplateView.vue'
 import StudentRegistrationView from '../views/StudentRegistrationView.vue'
 import StudentExamView from '../views/StudentExamView.vue'
@@ -23,6 +24,7 @@ const routes = [
   { path: '/admin/students', name: 'admin-students', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'students' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'analytics' } },
   { path: '/admin/knowledge', name: 'admin-knowledge', component: KnowledgeTemplateView, meta: { requiresAuth: true, roles: ADMIN_ROLES } },
+  { path: '/admin/settings', name: 'admin-settings', component: SystemConfigView, meta: { requiresAuth: true, roles: ['IT_ADMIN'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

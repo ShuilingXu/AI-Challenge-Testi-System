@@ -1,6 +1,7 @@
 package com.autohr.modules.system.service;
 
 import cn.hutool.core.util.StrUtil;
+import com.autohr.config.EnvironmentFileBootstrap;
 import com.autohr.common.exception.BusinessException;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +30,7 @@ public class SystemConfigService {
     private final Function<String, String> environmentLookup;
 
     public SystemConfigService() {
-        this(Paths.get(".env"), System::getenv);
+        this(EnvironmentFileBootstrap.defaultEnvPath(), System::getenv);
     }
 
     SystemConfigService(Path envPath) {

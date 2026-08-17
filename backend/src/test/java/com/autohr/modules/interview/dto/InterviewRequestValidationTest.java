@@ -21,18 +21,6 @@ class InterviewRequestValidationTest {
     }
 
     @Test
-    void rejectsLlmPromptBeyondDatabaseLimit() {
-        LlmConfigSaveRequest request = new LlmConfigSaveRequest();
-        request.setConfigName("interviewer");
-        request.setModelRole("INTERVIEWER");
-        request.setBaseUrl("https://example.invalid/v1");
-        request.setModelName("model");
-        request.setPromptTemplate("x".repeat(5001));
-
-        assertFalse(validator.validate(request).isEmpty());
-    }
-
-    @Test
     void rejectsUnboundedKnowledgeWeight() {
         JobKnowledgeWeightSaveRequest request = new JobKnowledgeWeightSaveRequest();
         request.setJobId(1L);

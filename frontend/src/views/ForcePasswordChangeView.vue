@@ -38,7 +38,7 @@ const submitting = ref(false)
 const form = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
 
 function targetByRole(roleCode) {
-  return roleCode === 'INTERVIEWEE' ? '/user' : '/admin'
+  return roleCode === 'INTERVIEWEE' ? '/student' : '/admin'
 }
 
 async function submit() {

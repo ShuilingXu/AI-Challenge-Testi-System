@@ -1,91 +1,14 @@
-CREATE TABLE IF NOT EXISTS hr_department (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    department_code VARCHAR(64) NOT NULL UNIQUE,
-    department_name VARCHAR(128) NOT NULL,
-    parent_department_id INTEGER,
-    manager_employee_id INTEGER,
-    description VARCHAR(1000) NOT NULL,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    status INTEGER NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS hr_employee (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_code VARCHAR(64) NOT NULL UNIQUE,
-    full_name VARCHAR(64) NOT NULL,
-    id_card_no VARCHAR(32) NOT NULL UNIQUE,
-    mobile_phone VARCHAR(32) NOT NULL UNIQUE,
-    email VARCHAR(128),
-    recruitment_major VARCHAR(128) NOT NULL,
-    position_name VARCHAR(128) NOT NULL,
-    manager_employee_id INTEGER,
-    department_id INTEGER NOT NULL,
-    bank_account_no VARCHAR(64) NOT NULL,
-    bank_name VARCHAR(128) NOT NULL,
-    hire_date DATE NOT NULL,
-    employment_status INTEGER NOT NULL DEFAULT 0,
-    source_candidate_id INTEGER,
-    interview_stage_status VARCHAR(64),
-    source_channel VARCHAR(64),
-    notes VARCHAR(1000),
-    job_id INTEGER,
-    base_salary DECIMAL(12,2) NOT NULL DEFAULT 0,
-    salary_confirmed INTEGER NOT NULL DEFAULT 0,
-    overtime_rate DECIMAL(12,2),
-    dismissal_reason VARCHAR(64),
-    dismissal_date DATE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (department_id) REFERENCES hr_department(id),
-    FOREIGN KEY (job_id) REFERENCES recruitment_job(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_integration_binding (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    module_code VARCHAR(64) NOT NULL,
-    business_type VARCHAR(64) NOT NULL,
-    business_id INTEGER,
-    employee_id INTEGER,
-    department_id INTEGER,
-    external_ref VARCHAR(128),
-    binding_status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-    payload TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id),
-    FOREIGN KEY (department_id) REFERENCES hr_department(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_hr_department_parent_department_id ON hr_department(parent_department_id);
-CREATE INDEX IF NOT EXISTS idx_hr_employee_department_id ON hr_employee(department_id);
-CREATE INDEX IF NOT EXISTS idx_hr_employee_manager_employee_id ON hr_employee(manager_employee_id);
-CREATE INDEX IF NOT EXISTS idx_hr_employee_job_id ON hr_employee(job_id);
-CREATE INDEX IF NOT EXISTS idx_hr_employee_dismissal_date ON hr_employee(dismissal_date);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_hr_employee_source_candidate_id ON hr_employee(source_candidate_id);
-CREATE INDEX IF NOT EXISTS idx_hr_integration_binding_module_code ON hr_integration_binding(module_code);
-CREATE INDEX IF NOT EXISTS idx_hr_integration_binding_employee_id ON hr_integration_binding(employee_id);
-
 CREATE TABLE IF NOT EXISTS recruitment_job (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_code VARCHAR(64) NOT NULL UNIQUE,
     job_title VARCHAR(128) NOT NULL,
-    department_id INTEGER,
     department_name VARCHAR(128) NOT NULL,
-    work_location VARCHAR(128),
-    job_type VARCHAR(64),
-    headcount INTEGER NOT NULL DEFAULT 1,
     requirements VARCHAR(2000) NOT NULL,
     responsibilities VARCHAR(2000) NOT NULL,
-    salary_range VARCHAR(128),
     publish_date DATE NOT NULL,
-    close_date DATE,
     status INTEGER NOT NULL DEFAULT 1,
-    default_overtime_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (department_id) REFERENCES hr_department(id)
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS recruitment_candidate (
@@ -93,154 +16,20 @@ CREATE TABLE IF NOT EXISTS recruitment_candidate (
     job_id INTEGER NOT NULL,
     full_name VARCHAR(64) NOT NULL,
     mobile_phone VARCHAR(32) NOT NULL,
-    email VARCHAR(128),
-    id_card_no VARCHAR(32),
     major VARCHAR(128) NOT NULL,
-    education_level VARCHAR(64),
-    graduation_school VARCHAR(128),
-    years_of_experience INTEGER,
-    expected_salary VARCHAR(128),
-    self_introduction VARCHAR(2000),
     application_status VARCHAR(32) NOT NULL DEFAULT 'SUBMITTED',
     interview_stage_status VARCHAR(64) NOT NULL DEFAULT '简历待查',
     interviewee_user_id INTEGER,
     interview_process_id INTEGER,
-    resume_file_id INTEGER,
-    resume_llm_score INTEGER,
-    resume_llm_comment VARCHAR(2000),
-    resume_llm_status VARCHAR(32),
-    resume_llm_evaluated_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (job_id) REFERENCES recruitment_job(id)
 );
 
-CREATE TABLE IF NOT EXISTS recruitment_resume_file (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    candidate_id INTEGER NOT NULL,
-    original_file_name VARCHAR(255) NOT NULL,
-    stored_file_name VARCHAR(255) NOT NULL,
-    file_path VARCHAR(500) NOT NULL,
-    content_type VARCHAR(128),
-    file_size INTEGER,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (candidate_id) REFERENCES recruitment_candidate(id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_recruitment_job_status ON recruitment_job(status);
-CREATE INDEX IF NOT EXISTS idx_recruitment_job_department_id ON recruitment_job(department_id);
 CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_job_id ON recruitment_candidate(job_id);
 CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_status ON recruitment_candidate(application_status);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_recruitment_candidate_job_interviewee ON recruitment_candidate(job_id, interviewee_user_id);
-CREATE INDEX IF NOT EXISTS idx_recruitment_resume_candidate_id ON recruitment_resume_file(candidate_id);
-
-CREATE TABLE IF NOT EXISTS hr_salary_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    effective_month CHAR(7) NOT NULL,
-    base_salary_before DECIMAL(12,2) NOT NULL,
-    base_salary_after DECIMAL(12,2) NOT NULL,
-    reason VARCHAR(500),
-    operator_user_id INTEGER,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_performance_month (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    salary_month CHAR(7) NOT NULL,
-    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-    note VARCHAR(500),
-    operator_user_id INTEGER,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_overtime_month (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    salary_month CHAR(7) NOT NULL,
-    overtime_hours DECIMAL(8,2) NOT NULL DEFAULT 0,
-    unit_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
-    overtime_pay DECIMAL(12,2) NOT NULL DEFAULT 0,
-    note VARCHAR(500),
-    operator_user_id INTEGER,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_social_insurance_month (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    salary_month CHAR(7) NOT NULL,
-    pension DECIMAL(12,2) NOT NULL DEFAULT 0,
-    medical DECIMAL(12,2) NOT NULL DEFAULT 0,
-    unemployment DECIMAL(12,2) NOT NULL DEFAULT 0,
-    housing_fund DECIMAL(12,2) NOT NULL DEFAULT 0,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_special_deduction_month (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    salary_month CHAR(7) NOT NULL,
-    children_education DECIMAL(12,2) NOT NULL DEFAULT 0,
-    continuing_education DECIMAL(12,2) NOT NULL DEFAULT 0,
-    housing_loan_interest DECIMAL(12,2) NOT NULL DEFAULT 0,
-    housing_rent DECIMAL(12,2) NOT NULL DEFAULT 0,
-    elderly_support DECIMAL(12,2) NOT NULL DEFAULT 0,
-    infant_care DECIMAL(12,2) NOT NULL DEFAULT 0,
-    other_deduction DECIMAL(12,2) NOT NULL DEFAULT 0,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS hr_payroll_month (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    salary_month CHAR(7) NOT NULL,
-    base_salary DECIMAL(12,2) NOT NULL,
-    performance DECIMAL(12,2) NOT NULL,
-    overtime_hours DECIMAL(8,2) NOT NULL,
-    overtime_pay DECIMAL(12,2) NOT NULL,
-    gross_income DECIMAL(12,2) NOT NULL,
-    social_insurance_total DECIMAL(12,2) NOT NULL,
-    special_deduction_total DECIMAL(12,2) NOT NULL,
-    taxable_income_month DECIMAL(12,2) NOT NULL,
-    cumulative_income DECIMAL(16,2) NOT NULL,
-    cumulative_deduction_base DECIMAL(16,2) NOT NULL,
-    cumulative_social_insurance DECIMAL(16,2) NOT NULL,
-    cumulative_special_deduction DECIMAL(16,2) NOT NULL,
-    cumulative_taxable_income DECIMAL(16,2) NOT NULL,
-    cumulative_tax_withheld DECIMAL(16,2) NOT NULL,
-    current_tax_withheld DECIMAL(12,2) NOT NULL,
-    net_pay DECIMAL(12,2) NOT NULL,
-    locked INTEGER NOT NULL DEFAULT 0,
-    calculated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES hr_employee(id)
-);
-
-CREATE TABLE IF NOT EXISTS user_dashboard_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    config_json TEXT NOT NULL
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_salary_history_employee_month ON hr_salary_history(employee_id, effective_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_performance_employee_month ON hr_performance_month(employee_id, salary_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_overtime_employee_month ON hr_overtime_month(employee_id, salary_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_social_employee_month ON hr_social_insurance_month(employee_id, salary_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_special_employee_month ON hr_special_deduction_month(employee_id, salary_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_payroll_employee_month ON hr_payroll_month(employee_id, salary_month);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_dashboard_config_user ON user_dashboard_config(user_id);
-CREATE INDEX IF NOT EXISTS idx_payroll_salary_month ON hr_payroll_month(salary_month);
 
 CREATE TABLE IF NOT EXISTS interview_batch (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

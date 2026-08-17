@@ -20,7 +20,6 @@ import com.autohr.modules.interview.dto.InterviewVO;
 import com.autohr.modules.interview.dto.JobKnowledgeWeightSaveRequest;
 import com.autohr.modules.interview.dto.KnowledgeBaseSaveRequest;
 import com.autohr.modules.interview.dto.KnowledgeItemSaveRequest;
-import com.autohr.modules.interview.dto.LlmConfigSaveRequest;
 import com.autohr.modules.interview.dto.StartInterviewProcessRequest;
 import com.autohr.modules.interview.dto.VideoSignalRequest;
 import com.autohr.modules.interview.dto.VideoSignalVO;
@@ -192,34 +191,6 @@ public class InterviewController {
     public ApiResponse<Void> deleteJobKnowledgeWeight(Authentication authentication, @PathVariable Long id) {
         interviewService.deleteJobKnowledgeWeight(id);
         audit(authentication, "DELETE_JOB_KNOWLEDGE_WEIGHT", "JOB_KNOWLEDGE_WEIGHT", id, "删除岗位知识权重");
-        return ApiResponse.success("deleted", null);
-    }
-
-    @PostMapping("/it/llm-configs")
-    @Transactional
-    public ApiResponse<InterviewVO> saveLlmConfig(Authentication authentication,
-                                                   @Valid @RequestBody LlmConfigSaveRequest request) {
-        InterviewVO saved = interviewService.saveLlmConfig(request);
-        audit(authentication, request.getId() == null ? "CREATE_LLM_CONFIG" : "UPDATE_LLM_CONFIG",
-                "LLM_CONFIG", saved.getId(),
-                "configName=" + saved.getConfigName() + ", modelRole=" + saved.getModelRole());
-        return ApiResponse.success(saved);
-    }
-
-    @GetMapping("/it/llm-configs")
-    public ApiResponse<PageResponse<InterviewVO>> listLlmConfigs(@RequestParam(required = false) String modelRole,
-                                                                   @RequestParam(required = false) Integer status,
-                                                                   @RequestParam(required = false) Integer page,
-                                                                   @RequestParam(required = false) Integer pageSize) {
-        return ApiResponse.success(PageResponse.slice(interviewService.listLlmConfigs(modelRole, status),
-                PageQuery.of(page, pageSize)));
-    }
-
-    @PostMapping("/it/llm-configs/{id}/delete")
-    @Transactional
-    public ApiResponse<Void> deleteLlmConfig(Authentication authentication, @PathVariable Long id) {
-        interviewService.deleteLlmConfig(id);
-        audit(authentication, "DELETE_LLM_CONFIG", "LLM_CONFIG", id, "删除 LLM 配置");
         return ApiResponse.success("deleted", null);
     }
 

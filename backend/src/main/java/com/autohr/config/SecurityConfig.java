@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/exams/admin/**").hasAnyAuthority("ROLE_IT_ADMIN", "ROLE_HR_ADMIN", "ROLE_HR_USER", "IT_ADMIN", "HR_ADMIN", "HR_USER")
                         .requestMatchers("/api/exams/student/**").hasAnyAuthority("ROLE_INTERVIEWEE", "INTERVIEWEE")
                         .requestMatchers("/api/site-settings/admin").hasAnyAuthority("ROLE_IT_ADMIN", "IT_ADMIN")
+                        .requestMatchers("/api/system/config").hasAnyAuthority("ROLE_IT_ADMIN", "IT_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/site-settings").permitAll()
                         .requestMatchers("/api/interview/hr/knowledge-bases", "/api/interview/hr/knowledge-bases/**",
                                 "/api/interview/hr/knowledge-items", "/api/interview/hr/knowledge-items/**",
@@ -56,6 +57,8 @@ public class SecurityConfig {
                                 "/api/interview/interviewee/ai-records")
                         .hasAnyAuthority("ROLE_INTERVIEWEE", "INTERVIEWEE")
                         .requestMatchers(HttpMethod.POST, "/api/interview/interviewee/ai-answer")
+                        .hasAnyAuthority("ROLE_INTERVIEWEE", "INTERVIEWEE")
+                        .requestMatchers(HttpMethod.POST, "/api/interview/interviewee/anti-cheat-event")
                         .hasAnyAuthority("ROLE_INTERVIEWEE", "INTERVIEWEE")
                         .requestMatchers("/api/auth/me", "/api/auth/logout", "/api/auth/change-password").authenticated()
                         .anyRequest().denyAll())

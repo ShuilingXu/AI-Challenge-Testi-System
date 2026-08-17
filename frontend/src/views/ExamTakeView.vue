@@ -1,7 +1,8 @@
 <template>
   <main class="exam-take"><header><RouterLink to="/student">返回我的考试</RouterLink><span>人工智能在线考试</span></header>
     <section v-if="process" class="exam-shell"><div class="exam-state"><p class="page-eyebrow">答题中</p><h1>{{ process.stageName || '人工智能答题' }}</h1><div class="round"><strong>{{ answeredCount }}</strong><span>/ {{ process.aiMaxQuestionRounds || '-' }} 轮已完成</span></div><el-progress :percentage="progress" :show-text="false" :stroke-width="8" /></div>
-      <template v-if="question"><article class="question-panel"><span class="topic">{{ question.knowledgePoint || '综合知识' }}</span><h2>{{ question.questionContent }}</h2><el-input v-model="answerContent" type="textarea" :rows="10" maxlength="5000" show-word-limit placeholder="请独立作答，尽量说明你的推理过程和关键结论。" :disabled="submitting" /><div class="answer-actions"><span v-if="lastFeedback">上一题反馈：{{ lastFeedback }}</span><el-button type="primary" :loading="submitting" :disabled="!answerContent.trim()" @click="submit">提交本题答案</el-button></div></article><aside class="records-panel"><h2>答题记录</h2><ol><li v-for="item in records" :key="item.id"><strong>第 {{ item.sequenceNo }} 轮</strong><span>{{ item.knowledgePoint }}</span><em v-if="item.averageScore !== null && item.averageScore !== undefined">{{ item.averageScore }} 分</em><small>{{ item.interviewerComment }}</small></li></ol></aside></template>
+      <template v-if="question"><article class="question-panel"><span class="topic">{{ question.knowledgePoint || '综合知识' }}</span><h2>{{ question.questionContent }}</h2><el-input v-model="answerContent" type="textarea" :rows="10" maxlength="5000" show-word-limit placeholder="请独立作答，尽量说明你的推理过程和关键结论。" :disabled="submitting" /><div class="answer-actions"><span v-if="lastFeedback">上一题反馈：{{ lastFeedback }}</span><el-button type="primary" :loading="submitting" :disabled="!answerContent.trim()" @click="submit">提交本题答案</el-button></div></article><aside class="records-panel"><h2>本阶段记录</h2><ol><li v-for="item in activeRecords" :key="item.id"><strong>第 {{ item.sequenceNo }} 轮</strong><span>{{ item.knowledgePoint }}</span><em v-if="item.averageScore !== null && item.averageScore !== undefined">{{ item.averageScore }} 分</em><small>{{ item.interviewerComment }}</small></li></ol></aside></template>
+      <section v-else-if="inProgress && questionGenerationFailed" class="waiting"><h2>题目暂时无法生成</h2><p>系统会继续重试。请确认考试使用的人工智能接口已配置并可访问。</p><el-button @click="load(false)">重新加载</el-button></section>
       <section v-else-if="inProgress" class="waiting"><el-icon class="is-loading"><Loading /></el-icon><h2>正在准备下一题</h2><p>人工智能正在根据本轮答题情况生成题目，请保持当前页面。</p></section>
       <section v-else class="complete"><p class="page-eyebrow">已完成</p><h2>本次答题已完成</h2><p>{{ process.processStatusView || '系统已保存答题结果。' }}</p><el-button type="primary" @click="goAnalysis">查看人工智能综合评价</el-button></section>
     </section>
@@ -16,16 +17,18 @@ import { Loading } from '@element-plus/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { interviewApi } from '../services/api'
 
-const route = useRoute(); const router = useRouter(); const processId = Number(route.params.processId); const process = ref(null); const question = ref(null); const records = ref([]); const answerContent = ref(''); const submitting = ref(false); let timer = null
-const answeredCount = computed(() => records.value.filter(item => item.answerStatus === 'COMPLETED').length)
+const route = useRoute(); const router = useRouter(); const processId = Number(route.params.processId); const process = ref(null); const question = ref(null); const records = ref([]); const answerContent = ref(''); const submitting = ref(false); let timer = null; let retryDelayMs = 2500; let disposed = false
+const activeRecords = computed(() => process.value?.processStageId ? records.value.filter(item => Number(item.processStageId) === Number(process.value.processStageId)) : records.value)
+const answeredCount = computed(() => activeRecords.value.filter(item => item.answerStatus === 'COMPLETED').length)
 const progress = computed(() => process.value?.aiMaxQuestionRounds ? Math.min(100, Math.round(answeredCount.value / process.value.aiMaxQuestionRounds * 100)) : 0)
 const inProgress = computed(() => process.value?.overallStatus === 'IN_PROGRESS' && process.value?.stageStatus === 'IN_PROGRESS')
-const lastFeedback = computed(() => records.value.filter(item => item.interviewerComment).at(-1)?.interviewerComment || '')
-async function load(silent = false) { try { const [processResult, questionResult, recordResult] = await Promise.all([interviewApi.getIntervieweeProcess(processId), interviewApi.getNextAiQuestion(processId), interviewApi.listIntervieweeAiRecords({ processId })]); process.value = processResult.data; question.value = questionResult.data; records.value = recordResult.data || []; if (!question.value && inProgress.value) schedule() } catch (error) { if (!silent) ElMessage.error(error.message || '考试加载失败') } }
-function schedule() { clearTimeout(timer); timer = window.setTimeout(() => load(true), 2500) }
+const lastFeedback = computed(() => activeRecords.value.filter(item => item.interviewerComment).at(-1)?.interviewerComment || '')
+const questionGenerationFailed = computed(() => activeRecords.value.some(item => item.questionStatus === 'FAILED'))
+async function load(silent = false) { clearTimeout(timer); try { const [processResult, questionResult, recordResult] = await Promise.all([interviewApi.getIntervieweeProcess(processId), interviewApi.getNextAiQuestion(processId), interviewApi.listIntervieweeAiRecords({ processId })]); process.value = processResult.data; question.value = questionResult.data; records.value = recordResult.data || []; retryDelayMs = 2500; if (!question.value && inProgress.value) schedule() } catch (error) { if (!silent) ElMessage.error(error.message || '考试加载失败'); if (error.status !== 401) { schedule(retryDelayMs); retryDelayMs = Math.min(retryDelayMs * 2, 15000) } } }
+function schedule(delay = 2500) { if (disposed) return; clearTimeout(timer); timer = window.setTimeout(() => load(true), delay) }
 async function submit() { submitting.value = true; try { await interviewApi.submitAiAnswer({ processId, questionId: question.value.id, answerContent: answerContent.value.trim() }); answerContent.value = ''; question.value = null; await load(true) } catch (error) { ElMessage.error(error.message || '提交失败，请重试') } finally { submitting.value = false } }
 function goAnalysis() { router.push('/student') }
-onMounted(() => load()); onBeforeUnmount(() => clearTimeout(timer))
+onMounted(() => load()); onBeforeUnmount(() => { disposed = true; clearTimeout(timer) })
 </script>
 
 <style scoped>
