@@ -18,9 +18,9 @@ import java.nio.file.StandardCopyOption;
 public class SiteSettingsService {
 
     private static final SiteSettings DEFAULT_SETTINGS = new SiteSettings(
-            "", "AI School Examination System",
-            "Class-based AI examinations and learning analytics.",
-            "AI School Examination System");
+            "", "人工智能考试系统",
+            "按班级组织人工智能考试与学情分析。",
+            "人工智能考试系统");
 
     private final ObjectMapper objectMapper;
     private final Path settingsPath;

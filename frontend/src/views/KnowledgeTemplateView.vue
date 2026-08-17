@@ -2,41 +2,41 @@
   <div>
     <AdminNav />
     <main class="page">
-      <header><p class="page-eyebrow">Question design</p><h1>Knowledge Bases and AI Templates</h1><p>Set the material for scoring, then assign a knowledge point to every AI question round.</p></header>
+      <header><p class="page-eyebrow">题目设计</p><h1>知识库与人工智能模板</h1><p>设置评分依据，并为每一轮人工智能题目分配知识点。</p></header>
       <el-tabs v-model="tab">
-        <el-tab-pane label="Knowledge bases" name="knowledge">
+        <el-tab-pane label="知识库" name="knowledge">
           <section class="grid">
             <el-form class="panel" label-position="top" :model="baseForm">
-              <h2>{{ baseForm.id ? 'Edit knowledge base' : 'New knowledge base' }}</h2>
-              <el-form-item label="Name"><el-input v-model="baseForm.knowledgeBaseName" /></el-form-item>
-              <el-form-item label="Subject"><el-input v-model="baseForm.techCategory" /></el-form-item>
-              <el-form-item label="Course"><el-input v-model="baseForm.jobCategory" /></el-form-item>
-              <el-form-item label="Enabled"><el-switch v-model="baseForm.status" :active-value="1" :inactive-value="0" /></el-form-item>
-              <div class="actions"><el-button type="primary" @click="saveBase">Save</el-button><el-button @click="resetBase">New</el-button></div>
+              <h2>{{ baseForm.id ? '编辑知识库' : '新建知识库' }}</h2>
+              <el-form-item label="名称"><el-input v-model="baseForm.knowledgeBaseName" /></el-form-item>
+              <el-form-item label="学科"><el-input v-model="baseForm.techCategory" /></el-form-item>
+              <el-form-item label="课程"><el-input v-model="baseForm.jobCategory" /></el-form-item>
+              <el-form-item label="启用"><el-switch v-model="baseForm.status" :active-value="1" :inactive-value="0" /></el-form-item>
+              <div class="actions"><el-button type="primary" @click="saveBase">保存</el-button><el-button @click="resetBase">新建</el-button></div>
             </el-form>
-            <section class="panel"><div class="panel-head"><h2>Knowledge bases</h2><el-button @click="loadBases">Refresh</el-button></div>
-              <el-table :data="bases" height="360" @row-click="selectBase"><el-table-column prop="knowledgeBaseName" label="Name" /><el-table-column prop="techCategory" label="Subject" /><el-table-column prop="jobCategory" label="Course" /><el-table-column label="State" width="90"><template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? 'Enabled' : 'Disabled' }}</el-tag></template></el-table-column></el-table>
+            <section class="panel"><div class="panel-head"><h2>知识库</h2><el-button @click="loadBases">刷新</el-button></div>
+              <el-table :data="bases" height="360" @row-click="selectBase"><el-table-column prop="knowledgeBaseName" label="名称" /><el-table-column prop="techCategory" label="学科" /><el-table-column prop="jobCategory" label="课程" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column></el-table>
             </section>
           </section>
-          <section v-if="selectedBase" class="panel items"><div class="panel-head"><div><h2>{{ selectedBase.knowledgeBaseName }} items</h2><p>CSV columns: point, content, status.</p></div><el-upload :show-file-list="false" accept=".csv" :http-request="importItems"><el-button>Import CSV</el-button></el-upload></div>
-            <div class="item-form"><el-input v-model="itemForm.knowledgePoint" placeholder="Knowledge point" /><el-input v-model="itemForm.knowledgeContent" type="textarea" :rows="2" placeholder="Teaching material or expected evidence" /><el-button type="primary" @click="saveItem">Add item</el-button></div>
-            <el-table :data="items" max-height="340"><el-table-column prop="knowledgePoint" label="Knowledge point" width="240" /><el-table-column prop="knowledgeContent" label="Content" /></el-table>
+          <section v-if="selectedBase" class="panel items"><div class="panel-head"><div><h2>{{ selectedBase.knowledgeBaseName }} 条目</h2><p>CSV 列：知识点、内容、状态。</p></div><el-upload :show-file-list="false" accept=".csv" :http-request="importItems"><el-button>导入 CSV</el-button></el-upload></div>
+            <div class="item-form"><el-input v-model="itemForm.knowledgePoint" placeholder="知识点" /><el-input v-model="itemForm.knowledgeContent" type="textarea" :rows="2" placeholder="教学材料或预期证据" /><el-button type="primary" @click="saveItem">添加条目</el-button></div>
+            <el-table :data="items" max-height="340"><el-table-column prop="knowledgePoint" label="知识点" width="240" /><el-table-column prop="knowledgeContent" label="内容" /></el-table>
           </section>
         </el-tab-pane>
-        <el-tab-pane label="AI exam templates" name="templates">
+        <el-tab-pane label="人工智能考试模板" name="templates">
           <section class="grid">
             <el-form class="panel" label-position="top" :model="templateForm">
-              <h2>{{ templateForm.id ? 'Edit template' : 'New template' }}</h2>
-              <el-form-item label="Template name"><el-input v-model="templateForm.templateName" /></el-form-item>
-              <el-form-item label="Description"><el-input v-model="templateForm.description" type="textarea" :rows="2" /></el-form-item>
-              <el-form-item label="Knowledge base"><el-select v-model="templateForm.knowledgeBaseId" filterable><el-option v-for="item in activeBases" :key="item.id" :label="item.knowledgeBaseName" :value="item.id" /></el-select></el-form-item>
-              <el-form-item label="Stage name"><el-input v-model="templateForm.stageName" /></el-form-item>
-              <el-form-item label="Round knowledge point plan"><el-input v-model="templateForm.roundKnowledgePoints" type="textarea" :rows="4" placeholder="Use commas or new lines: basics, branches, loops" /><p>The first value is used for round one. The final value is reused when there are more rounds.</p></el-form-item>
-              <el-form-item label="Enabled"><el-switch v-model="templateForm.status" :active-value="1" :inactive-value="0" /></el-form-item>
-              <div class="actions"><el-button type="primary" @click="saveTemplate">Save template</el-button><el-button @click="resetTemplate">New</el-button></div>
+              <h2>{{ templateForm.id ? '编辑模板' : '新建模板' }}</h2>
+              <el-form-item label="模板名称"><el-input v-model="templateForm.templateName" /></el-form-item>
+              <el-form-item label="描述"><el-input v-model="templateForm.description" type="textarea" :rows="2" /></el-form-item>
+              <el-form-item label="知识库"><el-select v-model="templateForm.knowledgeBaseId" filterable><el-option v-for="item in activeBases" :key="item.id" :label="item.knowledgeBaseName" :value="item.id" /></el-select></el-form-item>
+              <el-form-item label="阶段名称"><el-input v-model="templateForm.stageName" /></el-form-item>
+              <el-form-item label="每轮知识点计划"><el-input v-model="templateForm.roundKnowledgePoints" type="textarea" :rows="4" placeholder="用逗号或换行分隔：基础、分支、循环" /><p>第一项用于第一轮，后续轮次会复用最后一项。</p></el-form-item>
+              <el-form-item label="启用"><el-switch v-model="templateForm.status" :active-value="1" :inactive-value="0" /></el-form-item>
+              <div class="actions"><el-button type="primary" @click="saveTemplate">保存模板</el-button><el-button @click="resetTemplate">新建</el-button></div>
             </el-form>
-            <section class="panel"><div class="panel-head"><h2>Templates</h2><el-button @click="loadTemplates">Refresh</el-button></div>
-              <el-table :data="templates" height="480" @row-click="editTemplate"><el-table-column prop="templateName" label="Template" /><el-table-column prop="description" label="Description" /><el-table-column label="Round plan" min-width="200"><template #default="{ row }">{{ row.stages?.[0]?.roundKnowledgePoints || 'Not specified' }}</template></el-table-column></el-table>
+            <section class="panel"><div class="panel-head"><h2>模板</h2><el-button @click="loadTemplates">刷新</el-button></div>
+              <el-table :data="templates" height="480" @row-click="editTemplate"><el-table-column prop="templateName" label="模板" /><el-table-column prop="description" label="描述" /><el-table-column label="每轮计划" min-width="200"><template #default="{ row }">{{ row.stages?.[0]?.roundKnowledgePoints || '未指定' }}</template></el-table-column></el-table>
             </section>
           </section>
         </el-tab-pane>
@@ -55,19 +55,19 @@ const tab = ref('knowledge')
 const bases = ref([]); const items = ref([]); const templates = ref([]); const selectedBase = ref(null)
 const baseForm = reactive({ id: null, knowledgeBaseName: '', techCategory: '', jobCategory: '', status: 1 })
 const itemForm = reactive({ knowledgePoint: '', knowledgeContent: '' })
-const templateForm = reactive({ id: null, version: null, templateName: '', description: '', knowledgeBaseId: null, stageName: 'AI questions', roundKnowledgePoints: '', status: 1 })
+const templateForm = reactive({ id: null, version: null, templateName: '', description: '', knowledgeBaseId: null, stageName: '人工智能题目', roundKnowledgePoints: '', status: 1 })
 const activeBases = computed(() => bases.value.filter(item => item.status === 1))
-const fail = (error) => ElMessage.error(error.message || 'Request failed')
+const fail = (error) => ElMessage.error(error.message || '请求失败')
 function resetBase() { Object.assign(baseForm, { id: null, knowledgeBaseName: '', techCategory: '', jobCategory: '', status: 1 }) }
-function resetTemplate() { Object.assign(templateForm, { id: null, version: null, templateName: '', description: '', knowledgeBaseId: null, stageName: 'AI questions', roundKnowledgePoints: '', status: 1 }) }
+function resetTemplate() { Object.assign(templateForm, { id: null, version: null, templateName: '', description: '', knowledgeBaseId: null, stageName: '人工智能题目', roundKnowledgePoints: '', status: 1 }) }
 async function loadBases() { try { bases.value = (await interviewApi.listKnowledgeBases()).data || [] } catch (error) { fail(error) } }
 async function loadTemplates() { try { templates.value = (await interviewApi.listProcessTemplates()).data || [] } catch (error) { fail(error) } }
 async function selectBase(base) { selectedBase.value = base; Object.assign(baseForm, base); try { items.value = (await interviewApi.listKnowledgeItems({ knowledgeBaseId: base.id })).data || [] } catch (error) { fail(error) } }
-async function saveBase() { try { const saved = (await interviewApi.saveKnowledgeBase({ ...baseForm })).data; await loadBases(); await selectBase(saved); ElMessage.success('Knowledge base saved') } catch (error) { fail(error) } }
-async function saveItem() { if (!selectedBase.value) return; try { await interviewApi.saveKnowledgeItem({ knowledgeBaseId: selectedBase.value.id, knowledgePoint: itemForm.knowledgePoint, knowledgeContent: itemForm.knowledgeContent, status: 1 }); itemForm.knowledgePoint = ''; itemForm.knowledgeContent = ''; await selectBase(selectedBase.value); ElMessage.success('Knowledge item added') } catch (error) { fail(error) } }
-async function importItems({ file }) { try { const count = (await interviewApi.importKnowledgeItems(selectedBase.value.id, file)).data; await selectBase(selectedBase.value); ElMessage.success(`Imported ${count} items`) } catch (error) { fail(error) } }
-async function saveTemplate() { try { await interviewApi.saveProcessTemplate({ id: templateForm.id, version: templateForm.version, templateName: templateForm.templateName, description: templateForm.description, status: templateForm.status, stages: [{ stageName: templateForm.stageName, stageType: 'AI', knowledgeBaseId: templateForm.knowledgeBaseId, roundKnowledgePoints: templateForm.roundKnowledgePoints, sequenceNo: 1 }] }); resetTemplate(); await loadTemplates(); ElMessage.success('Template saved') } catch (error) { fail(error) } }
-function editTemplate(row) { const stage = row.stages?.[0] || {}; Object.assign(templateForm, { id: row.id, version: row.version, templateName: row.templateName, description: row.description || '', knowledgeBaseId: stage.knowledgeBaseId || null, stageName: stage.stageName || 'AI questions', roundKnowledgePoints: stage.roundKnowledgePoints || '', status: row.status }) }
+async function saveBase() { try { const saved = (await interviewApi.saveKnowledgeBase({ ...baseForm })).data; await loadBases(); await selectBase(saved); ElMessage.success('知识库已保存') } catch (error) { fail(error) } }
+async function saveItem() { if (!selectedBase.value) return; try { await interviewApi.saveKnowledgeItem({ knowledgeBaseId: selectedBase.value.id, knowledgePoint: itemForm.knowledgePoint, knowledgeContent: itemForm.knowledgeContent, status: 1 }); itemForm.knowledgePoint = ''; itemForm.knowledgeContent = ''; await selectBase(selectedBase.value); ElMessage.success('知识点已添加') } catch (error) { fail(error) } }
+async function importItems({ file }) { try { const count = (await interviewApi.importKnowledgeItems(selectedBase.value.id, file)).data; await selectBase(selectedBase.value); ElMessage.success(`已导入 ${count} 条知识点`) } catch (error) { fail(error) } }
+async function saveTemplate() { try { await interviewApi.saveProcessTemplate({ id: templateForm.id, version: templateForm.version, templateName: templateForm.templateName, description: templateForm.description, status: templateForm.status, stages: [{ stageName: templateForm.stageName, stageType: 'AI', knowledgeBaseId: templateForm.knowledgeBaseId, roundKnowledgePoints: templateForm.roundKnowledgePoints, sequenceNo: 1 }] }); resetTemplate(); await loadTemplates(); ElMessage.success('模板已保存') } catch (error) { fail(error) } }
+function editTemplate(row) { const stage = row.stages?.[0] || {}; Object.assign(templateForm, { id: row.id, version: row.version, templateName: row.templateName, description: row.description || '', knowledgeBaseId: stage.knowledgeBaseId || null, stageName: stage.stageName || '人工智能题目', roundKnowledgePoints: stage.roundKnowledgePoints || '', status: row.status }) }
 onMounted(async () => { await Promise.all([loadBases(), loadTemplates()]) })
 </script>
 

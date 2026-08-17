@@ -2,7 +2,7 @@
   <main class="password-change-page">
     <section class="password-change-panel">
       <header>
-        <p class="page-eyebrow">Account security</p>
+        <p class="page-eyebrow">账号安全</p>
         <h1>修改初始密码</h1>
         <p>为保护账号安全，请先设置新的登录密码。</p>
       </header>

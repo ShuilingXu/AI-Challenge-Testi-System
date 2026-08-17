@@ -3,6 +3,8 @@ app:
     sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:autohr-dev.db}
 
 auth:
+  bootstrap:
+    default-password-exempt-usernames: ${AUTH_BOOTSTRAP_DEFAULT_PASSWORD_EXEMPT_USERNAMES:itadmin}
   session-cookie:
     secure: ${AUTH_SESSION_COOKIE_SECURE:false}
   csrf-cookie:

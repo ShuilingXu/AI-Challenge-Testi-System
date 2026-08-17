@@ -1,8 +1,8 @@
 export const DEFAULT_SITE_SETTINGS = Object.freeze({
   logoUrl: '',
-  siteTitle: 'AI School Examination System',
-  siteSubtitle: 'Class-based AI examinations and learning analytics.',
-  footerHtml: 'AI School Examination System',
+  siteTitle: '人工智能考试系统',
+  siteSubtitle: '按班级组织人工智能考试与学情分析。',
+  footerHtml: '人工智能考试系统',
 })
 
 const limits = { logoUrl: 500, siteTitle: 120, siteSubtitle: 500, footerHtml: 500 }
@@ -41,7 +41,7 @@ export function siteInitials(siteTitle) {
 export function applySiteMetadata(value, targetDocument = globalThis.document) {
   if (!targetDocument) return
   const settings = normalizeSiteSettings(value)
-  targetDocument.title = `${settings.siteTitle} | AI School Examination System`
+  targetDocument.title = `${settings.siteTitle} | 人工智能考试系统`
   let favicon = targetDocument.querySelector('link[rel~="icon"]')
   if (!favicon) {
     favicon = targetDocument.createElement('link')

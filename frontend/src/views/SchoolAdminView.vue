@@ -49,7 +49,7 @@
           <el-form-item label="考试代码"><el-input v-model="examForm.examCode" placeholder="例如：JAVA-2026-01" /></el-form-item>
           <el-form-item label="面向班级"><el-select v-model="examForm.classId" clearable placeholder="不选则全体学生"><el-option v-for="item in classes" :key="item.id" :label="`${item.majorName} / ${item.className}`" :value="item.id" /></el-select></el-form-item>
           <el-form-item label="知识库"><el-select v-model="examForm.knowledgeBaseId" clearable><el-option v-for="item in knowledgeBases" :key="item.id" :label="item.knowledgeBaseName" :value="item.id" /></el-select></el-form-item>
-          <el-form-item label="AI 考试模板"><el-select v-model="examForm.processTemplateId" clearable><el-option v-for="item in templates" :key="item.id" :label="item.templateName" :value="item.id" /></el-select><p class="hint">模板中可为每一轮指定知识点；未选模板时从知识库随机出题。</p></el-form-item>
+          <el-form-item label="人工智能考试模板"><el-select v-model="examForm.processTemplateId" clearable><el-option v-for="item in templates" :key="item.id" :label="item.templateName" :value="item.id" /></el-select><p class="hint">模板中可为每一轮指定知识点；未选模板时从知识库随机出题。</p></el-form-item>
           <div class="number-grid"><el-form-item label="答题轮数"><el-input-number v-model="examForm.questionRounds" :min="1" :max="20" /></el-form-item><el-form-item label="及格分"><el-input-number v-model="examForm.passingScore" :min="0" :max="100" /></el-form-item></div>
           <el-form-item label="开放时间"><el-date-picker v-model="examForm.publishStart" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="开始时间" /><span class="date-separator">至</span><el-date-picker v-model="examForm.publishEnd" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="结束时间" /></el-form-item>
           <el-form-item label="考试说明"><el-input v-model="examForm.instructions" type="textarea" :rows="3" /></el-form-item>
@@ -57,14 +57,14 @@
           <div class="actions"><el-button type="primary" @click="saveExam">保存考试</el-button><el-button @click="resetExam">新建</el-button></div>
         </el-form>
         <section class="list-panel"><div class="panel-head"><h2>已发布考试</h2><el-button @click="loadExams">刷新</el-button></div>
-          <el-table :data="exams" height="620" @row-click="editExam"><el-table-column prop="examName" label="考试" min-width="170" /><el-table-column prop="className" label="班级" /><el-table-column prop="questionRounds" label="轮数" width="80" /><el-table-column prop="passingScore" label="及格" width="80" /><el-table-column prop="templateName" label="AI 模板" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">{{ statusLabel(row.status) }}</el-tag></template></el-table-column></el-table>
+          <el-table :data="exams" height="620" @row-click="editExam"><el-table-column prop="examName" label="考试" min-width="170" /><el-table-column prop="className" label="班级" /><el-table-column prop="questionRounds" label="轮数" width="80" /><el-table-column prop="passingScore" label="及格" width="80" /><el-table-column prop="templateName" label="人工智能模板" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">{{ statusLabel(row.status) }}</el-tag></template></el-table-column></el-table>
         </section>
       </section>
 
       <section v-else class="analytics">
         <div class="filter-band"><el-select v-model="analyticsFilter.examId" clearable placeholder="全部考试" @change="loadAnalytics"><el-option v-for="item in exams" :key="item.id" :label="item.examName" :value="item.id" /></el-select><el-select v-model="analyticsFilter.classId" clearable placeholder="全部班级" @change="loadAnalytics"><el-option v-for="item in classes" :key="item.id" :label="item.className" :value="item.id" /></el-select></div>
         <div class="metric-row"><article><span>参与学生</span><strong>{{ analytics.studentCount || 0 }}</strong></article><article><span>平均得分率</span><strong>{{ analytics.scoreRate || 0 }}%</strong></article><article><span>平均失分率</span><strong>{{ analytics.lossRate || 0 }}%</strong></article><article><span>覆盖考试</span><strong>{{ analytics.examCount || 0 }}</strong></article></div>
-        <section class="analysis-band"><h2>AI 学情总结</h2><p>{{ analytics.aiSummary || '暂无已完成答题数据。' }}</p></section>
+        <section class="analysis-band"><h2>人工智能学情总结</h2><p>{{ analytics.aiSummary || '暂无已完成答题数据。' }}</p></section>
         <section class="knowledge-table"><div class="panel-head"><h2>知识点掌握情况</h2></div><el-table :data="analytics.knowledgePoints || []"><el-table-column prop="knowledgePoint" label="知识点" /><el-table-column label="得分率"><template #default="{ row }"><el-progress :percentage="row.scoreRate" :stroke-width="10" /></template></el-table-column><el-table-column prop="lossRate" label="失分率" width="120"><template #default="{ row }">{{ row.lossRate }}%</template></el-table-column><el-table-column prop="rounds" label="有效答题数" width="120" /></el-table></section>
         <section class="knowledge-table"><div class="panel-head"><h2>学生得分明细</h2></div><el-table :data="analytics.students || []" max-height="360"><el-table-column prop="studentNo" label="学号" /><el-table-column prop="fullName" label="姓名" /><el-table-column prop="examName" label="考试" /><el-table-column prop="className" label="班级" /><el-table-column prop="scoreRate" label="得分率"><template #default="{ row }">{{ row.scoreRate }}%</template></el-table-column><el-table-column prop="lossRate" label="失分率"><template #default="{ row }">{{ row.lossRate }}%</template></el-table-column></el-table></section>
       </section>
@@ -81,7 +81,7 @@ import { interviewApi, schoolApi } from '../services/api'
 
 const route = useRoute()
 const mode = computed(() => route.meta.schoolMode || 'exams')
-const titles = { classes: ['班级管理', '维护专业与班级，支持批量导入。'], students: ['学生管理', '维护学生档案，学生可通过班级、姓名和学号进入考试。'], exams: ['考试发布', '发布给指定班级或全体学生的 AI 考试。'], analytics: ['得分分析', '从全局答题结果汇总得分率、失分率和知识点掌握情况。'] }
+const titles = { classes: ['班级管理', '维护专业与班级，支持批量导入。'], students: ['学生管理', '维护学生档案，学生可通过班级、姓名和学号进入考试。'], exams: ['考试发布', '发布给指定班级或全体学生的人工智能考试。'], analytics: ['得分分析', '从全局答题结果汇总得分率、失分率和知识点掌握情况。'] }
 const title = computed(() => titles[mode.value]?.[0] || '考试管理')
 const description = computed(() => titles[mode.value]?.[1] || '')
 const loading = ref(false)
