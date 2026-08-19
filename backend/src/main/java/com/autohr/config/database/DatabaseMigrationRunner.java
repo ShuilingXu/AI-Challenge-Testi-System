@@ -71,6 +71,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 migrateInterviewVideoSessionColumns(connection, statement);
                 migrateInterviewProcessStageColumns(connection, statement);
                 migrateInterviewLlmConfigColumns(connection, statement);
+                migrateSchoolExamColumns(connection, statement);
                 migrateSysUserColumns(connection, statement);
                 migrateReferentialIntegrityConstraints(connection, statement);
                 assertNoDuplicateBusinessKeys(statement);
@@ -191,6 +192,12 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         addColumnIfMissing(connection, statement, "interview_process", "last_heartbeat_at", dateTimeType());
         addColumnIfMissing(connection, statement, "interview_process", "template_id", "INTEGER");
         addColumnIfMissing(connection, statement, "interview_process", "template_name", "VARCHAR(128)");
+    }
+
+    private void migrateSchoolExamColumns(Connection connection, Statement statement) throws SQLException {
+        addColumnIfMissing(connection, statement, "school_exam", "follow_up_threshold", "INTEGER");
+        addColumnIfMissing(connection, statement, "school_exam", "follow_up_rounds", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(connection, statement, "school_exam", "anti_cheat_switch_limit", "INTEGER NOT NULL DEFAULT 5");
     }
 
     private void migrateInterviewProcessTemplateColumns(Connection connection, Statement statement) throws SQLException {

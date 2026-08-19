@@ -129,6 +129,7 @@ export const schoolApi = {
   importStudents(file) { const form = new FormData(); form.append('file', file); return request.post('/exams/admin/students/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
   listAdminExams() { return request.get('/exams/admin/exams') },
   saveExam(payload) { return request.post('/exams/admin/exams', payload) },
+  deleteExam(id) { return request.post(`/exams/admin/exams/${id}/delete`) },
   analytics(params) { return request.get('/exams/admin/analytics', { params }) },
   getAdminAttempt(processId) { return request.get(`/exams/admin/attempts/${processId}`) },
   listStudentExams() { return request.get('/exams/student/exams') },

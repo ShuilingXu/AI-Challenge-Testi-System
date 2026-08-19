@@ -34,6 +34,18 @@ public class SchoolExamSaveRequest {
     @Min(value = 0, message = "及格分不能低于0")
     @Max(value = 100, message = "及格分不能高于100")
     private Integer passingScore;
+
+    @Min(value = 0, message = "追问阈值不能低于0")
+    @Max(value = 100, message = "追问阈值不能高于100")
+    private Integer followUpThreshold;
+
+    @Min(value = 0, message = "追问轮数不能低于0")
+    @Max(value = 20, message = "追问轮数不能超过20")
+    private Integer followUpRounds;
+
+    @Min(value = 1, message = "允许切屏次数至少为1")
+    @Max(value = 20, message = "允许切屏次数不能超过20")
+    private Integer antiCheatSwitchLimit;
     private LocalDateTime publishStart;
     private LocalDateTime publishEnd;
     private String status;

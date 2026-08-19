@@ -90,6 +90,8 @@ public class InterviewVO {
     private Integer scorerScore;
     private Integer averageScore;
     private Integer sequenceNo;
+    private Long previousRecordId;
+    private Boolean followUp;
     private String reviewerComment;
 
     private String videoSerialNo;

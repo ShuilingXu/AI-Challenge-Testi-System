@@ -91,6 +91,12 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.saveExam(request));
     }
 
+    @PostMapping("/admin/exams/{examId}/delete")
+    public ApiResponse<Void> deleteExam(@PathVariable Long examId) {
+        schoolExamService.deleteExam(examId);
+        return ApiResponse.success("deleted", null);
+    }
+
     @GetMapping("/admin/analytics")
     public ApiResponse<Map<String, Object>> analytics(@RequestParam(required = false) Long examId,
                                                         @RequestParam(required = false) Long classId) {

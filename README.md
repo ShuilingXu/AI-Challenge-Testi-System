@@ -35,6 +35,8 @@ The existing role codes are retained for data compatibility. In the school UI, t
 5. Create an exam at `/admin/exams`, select its class, knowledge base or template, question-round count, pass score, and publication window, then set it to `PUBLISHED`.
 6. Monitor completed attempts and mastery analytics at `/admin/analytics`.
 
+IT administrators can configure the OpenAI-compatible endpoint, model, default prompt, and per-function prompt overrides at `/admin/settings`. The function overrides cover question/follow-up generation, answer scoring, and learning summaries; leave an override blank to inherit the default prompt. Changes are written to `.env` and take effect after restarting the backend.
+
 Class import columns, after the header row: `majorName`, `className`, `classCode`, `description`.
 
 Student import columns, after the header row: `studentNo`, `fullName`, `classCode`. Keep student numbers formatted as text in Excel.
@@ -101,7 +103,7 @@ npm install
 npm run dev
 ```
 
-The backend runs on `http://localhost:8080` and the Vite frontend runs on `http://localhost:3000`. The development profile uses SQLite when a database URL is not supplied; schema migrations create the school tables automatically.
+The backend runs on `http://localhost:8081` and the Vite frontend runs on `http://localhost:3000`. The development profile uses SQLite when a database URL is not supplied; schema migrations create the school tables automatically.
 
 Default bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`, each initially using `123456`. They must change the initial password unless explicitly exempted through deployment configuration.
 

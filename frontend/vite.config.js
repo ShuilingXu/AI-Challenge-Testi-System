@@ -19,7 +19,7 @@ export default defineConfig({
     ...(allowedHosts.length > 0 ? { allowedHosts } : {}),
     proxy: {
       '/api': {
-        target: process.env.VITE_DEV_API_TARGET || 'http://localhost:8080',
+        target: process.env.VITE_DEV_API_TARGET || 'http://localhost:8081',
         changeOrigin: true
       }
     }

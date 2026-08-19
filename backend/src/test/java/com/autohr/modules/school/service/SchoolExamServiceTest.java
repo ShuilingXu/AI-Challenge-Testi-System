@@ -135,6 +135,39 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void deletesAnExamThatHasNotBeenStarted() {
+        long examId = seedDeletableExam();
+        jdbc.update("INSERT INTO interview_job_knowledge_weight(job_id,knowledge_base_id,weight) VALUES(?,?,?)", 61L, 1L, 100);
+
+        service.deleteExam(examId);
+
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM school_exam WHERE id=?", Integer.class, examId));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM recruitment_job WHERE id=61", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM interview_job_knowledge_weight WHERE job_id=61", Integer.class));
+    }
+
+    @Test
+    void refusesToDeleteAnExamWithAnAttempt() {
+        long examId = seedDeletableExam();
+        jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(?,?,?,?,1)",
+                71L, "student_delete", "not-used", "INTERVIEWEE");
+        jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code,status) VALUES(?,?,?,?,1)",
+                71L, "Computer Science", "Class 71", "CS-71");
+        jdbc.update("INSERT INTO school_student(id,student_no,full_name,class_id,user_id,status) VALUES(?,?,?,?,?,1)",
+                71L, "DELETE-71", "Ada", 71L, 71L);
+        jdbc.update("INSERT INTO recruitment_candidate(id,job_id,full_name,mobile_phone,major,application_status,interview_stage_status,interviewee_user_id) "
+                        + "VALUES(?,?,?,?,?,?,?,?)", 71L, 61L, "Ada", "school-DELETE-71", "Computer Science", "EXAM_STARTED", "In progress", 71L);
+        jdbc.update("INSERT INTO interview_process(id,recruitment_candidate_id,interviewee_user_id,job_id,current_stage,stage_status,overall_status,process_status_view) "
+                        + "VALUES(?,?,?,?,?,?,?,?)", 71L, 71L, 71L, 61L, "AI", "IN_PROGRESS", "IN_PROGRESS", "答题中");
+        jdbc.update("INSERT INTO school_exam_attempt(exam_id,student_id,process_id) VALUES(?,?,?)", examId, 71L, 71L);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.deleteExam(examId));
+
+        assertTrue(error.getMessage().contains("已有答题记录"));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_exam WHERE id=?", Integer.class, examId));
+    }
+
+    @Test
     void registrationBindsAnIntervieweeAccountAndRejectsDifferentRosterDetails() {
         jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
                 "Computer Science", "Class 1", "CS-1");
@@ -295,6 +328,14 @@ class SchoolExamServiceTest {
                         + "VALUES(?,?,?,?,?,?,?,1)", 11L, "EX-2", "Exam", "Class 2", "", "", "2026-08-16");
         jdbc.update("INSERT INTO school_exam(id,exam_code,exam_name,class_id,legacy_job_id,question_rounds,passing_score,status) VALUES(?,?,?,?,?,?,?,?)",
                 31L, "EX-2", "Low pass mark exam", 1L, 11L, 1, passingScore, "PUBLISHED");
+    }
+
+    private long seedDeletableExam() {
+        jdbc.update("INSERT INTO recruitment_job(id,job_code,job_title,department_name,requirements,responsibilities,publish_date,status) "
+                        + "VALUES(?,?,?,?,?,?,?,1)", 61L, "DELETE-EXAM", "Delete exam", "All students", "", "School exam", "2026-08-16");
+        jdbc.update("INSERT INTO school_exam(id,exam_code,exam_name,legacy_job_id,question_rounds,passing_score,status) VALUES(?,?,?,?,?,?,?)",
+                61L, "DELETE-EXAM", "Delete exam", 61L, 5, 60, "DRAFT");
+        return 61L;
     }
 
     private void seedCompletedAttempt() {
