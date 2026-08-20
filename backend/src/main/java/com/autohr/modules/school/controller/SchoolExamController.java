@@ -60,6 +60,12 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.saveClass(request));
     }
 
+    @PostMapping("/admin/classes/{classId}/delete")
+    public ApiResponse<Void> deleteClass(@PathVariable Long classId) {
+        schoolExamService.deleteClass(classId);
+        return ApiResponse.success("deleted", null);
+    }
+
     @PostMapping("/admin/classes/import")
     public ApiResponse<Map<String, Object>> importClasses(@RequestParam("file") MultipartFile file) {
         return ApiResponse.success(schoolExamService.importClasses(file));

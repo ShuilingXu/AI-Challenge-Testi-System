@@ -14,6 +14,7 @@ import com.autohr.modules.interview.service.InterviewService;
 import com.autohr.modules.recruitment.entity.RecruitmentCandidate;
 import com.autohr.modules.recruitment.mapper.RecruitmentCandidateMapper;
 import com.autohr.modules.recruitment.mapper.RecruitmentJobMapper;
+import com.autohr.modules.school.dto.SchoolClassSaveRequest;
 import com.autohr.modules.school.dto.StudentRegistrationRequest;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,6 +133,45 @@ class SchoolExamServiceTest {
 
         assertThrows(BusinessException.class, () -> service.importClasses(file));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM school_class", Integer.class));
+    }
+
+    @Test
+    void savedClassAppearsInTheClassList() {
+        SchoolClassSaveRequest request = new SchoolClassSaveRequest();
+        request.setMajorName("Computer Science");
+        request.setClassName("Class 1");
+        request.setClassCode("CS-1");
+
+        Map<String, Object> saved = service.saveClass(request);
+        List<Map<String, Object>> classes = service.listClasses(null);
+
+        assertEquals(saved.get("id"), classes.get(0).get("id"));
+        assertEquals("CS-1", classes.get(0).get("classCode"));
+    }
+
+    @Test
+    void deletesAnUnusedClass() {
+        jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
+                "Computer Science", "Class 1", "CS-1");
+        long classId = jdbc.queryForObject("SELECT id FROM school_class WHERE class_code='CS-1'", Long.class);
+
+        service.deleteClass(classId);
+
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM school_class WHERE id=?", Integer.class, classId));
+    }
+
+    @Test
+    void refusesToDeleteAClassWithStudents() {
+        jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
+                "Computer Science", "Class 1", "CS-1");
+        long classId = jdbc.queryForObject("SELECT id FROM school_class WHERE class_code='CS-1'", Long.class);
+        jdbc.update("INSERT INTO school_student(student_no,full_name,class_id,status) VALUES(?,?,?,1)",
+                "2026001", "Ada", classId);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.deleteClass(classId));
+
+        assertTrue(error.getMessage().contains("不能删除"));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_class WHERE id=?", Integer.class, classId));
     }
 
     @Test

@@ -124,6 +124,19 @@ public class SchoolExamService {
     }
 
     @Transactional
+    public void deleteClass(Long classId) {
+        requireClass(classId);
+        int studentCount = jdbc.queryForObject("SELECT COUNT(*) FROM school_student WHERE class_id=?", Integer.class, classId);
+        int examCount = jdbc.queryForObject("SELECT COUNT(*) FROM school_exam WHERE class_id=?", Integer.class, classId);
+        if (studentCount > 0 || examCount > 0) {
+            throw new BusinessException("班级已有学生或考试，不能删除，请先移除关联数据或停用班级");
+        }
+        if (jdbc.update("DELETE FROM school_class WHERE id=?", classId) != 1) {
+            throw new BusinessException("班级删除失败，请刷新后重试");
+        }
+    }
+
+    @Transactional
     public Map<String, Object> saveStudent(SchoolStudentSaveRequest request) {
         requireActiveClass(request.getClassId());
         requireStudentNoAvailable(request.getStudentNo(), request.getId());

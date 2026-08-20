@@ -123,6 +123,7 @@ export const schoolApi = {
   registerStudent(payload) { return request.post('/exams/student-registration', payload) },
   listClasses(params) { return request.get('/exams/admin/classes', { params }) },
   saveClass(payload) { return request.post('/exams/admin/classes', payload) },
+  deleteClass(id) { return request.post(`/exams/admin/classes/${id}/delete`) },
   importClasses(file) { const form = new FormData(); form.append('file', file); return request.post('/exams/admin/classes/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
   listStudents(params) { return request.get('/exams/admin/students', { params }) },
   saveStudent(payload) { return request.post('/exams/admin/students', payload) },

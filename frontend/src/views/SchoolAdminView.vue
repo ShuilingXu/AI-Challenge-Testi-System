@@ -21,7 +21,7 @@
           <p class="hint">Excel 列顺序：专业、班级名称、班级代码、说明。首行为表头。</p>
         </el-form>
         <section class="list-panel"><div class="panel-head"><h2>班级列表</h2><el-input v-model="classKeyword" clearable placeholder="搜索专业、班级或代码" @input="loadClasses" /></div>
-          <el-table :data="classes" height="520" @row-click="editClass"><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column prop="classCode" label="班级代码" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column></el-table>
+          <el-table :data="classes" height="520" @row-click="editClass"><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column prop="classCode" label="班级代码" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" @click.stop="removeClass(row)">删除</el-button></template></el-table-column></el-table>
         </section>
       </section>
 
@@ -115,7 +115,30 @@ async function loadClasses() { try { classes.value = (await schoolApi.listClasse
 async function loadStudents() { try { students.value = (await schoolApi.listStudents({ classId: studentClassId.value || undefined, keyword: studentKeyword.value || undefined })).data || [] } catch (error) { fail(error) } }
 async function loadExams() { try { exams.value = (await schoolApi.listAdminExams()).data || [] } catch (error) { fail(error) } }
 async function loadDependencies() { try { const [kb, tpl] = await Promise.all([interviewApi.listKnowledgeBases({ status: 1 }), interviewApi.listProcessTemplates({ status: 1 })]); knowledgeBases.value = kb.data || []; templates.value = (tpl.data || []).filter(template => template.stages?.length && template.stages.every(stage => stage.stageType === 'AI')) } catch (error) { fail(error) } }
-async function saveClass() { try { await schoolApi.saveClass({ ...classForm }); ElMessage.success('班级已保存'); resetClass(); await loadClasses() } catch (error) { fail(error) } }
+async function saveClass() {
+  try {
+    const saved = (await schoolApi.saveClass({ ...classForm })).data
+    classKeyword.value = ''
+    resetClass()
+    await loadClasses()
+    if (saved && !classes.value.some(item => item.id === saved.id)) {
+      classes.value = [...classes.value, saved].sort((left, right) =>
+        `${left.majorName}\u0000${left.className}`.localeCompare(`${right.majorName}\u0000${right.className}`, 'zh-CN'))
+    }
+    ElMessage.success('班级已保存')
+  } catch (error) { fail(error) }
+}
+async function removeClass(row) {
+  try {
+    await ElMessageBox.confirm(`确定删除“${row.className}”吗？`, '删除班级', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    await schoolApi.deleteClass(row.id)
+    if (classForm.id === row.id) resetClass()
+    classes.value = classes.value.filter(item => item.id !== row.id)
+    ElMessage.success('班级已删除')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') fail(error)
+  }
+}
 async function saveStudent() { try { await schoolApi.saveStudent({ ...studentForm }); ElMessage.success('学生已保存'); resetStudent(); await loadStudents() } catch (error) { fail(error) } }
 async function saveExam() { try { await schoolApi.saveExam({ ...examForm, publishStart: examForm.publishStart || null, publishEnd: examForm.publishEnd || null }); ElMessage.success('考试已保存'); resetExam(); await loadExams() } catch (error) { fail(error) } }
 async function removeExam(row) {
