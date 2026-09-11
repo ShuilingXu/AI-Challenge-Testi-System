@@ -97,6 +97,71 @@ async function requestPage(path, params) {
   return { ...response, data: items, pagination: { ...pagination, loaded: items.length } }
 }
 
+// PostgreSQL folds unquoted SQL aliases to lowercase. Keep the school UI
+// stable when an older backend returns keys such as `classname` or `classid`.
+const schoolFieldAliases = {
+  majorname: 'majorName', major_name: 'majorName',
+  classname: 'className', class_name: 'className',
+  classcode: 'classCode', class_code: 'classCode',
+  classid: 'classId', class_id: 'classId',
+  studentno: 'studentNo', student_no: 'studentNo',
+  fullname: 'fullName', full_name: 'fullName',
+  userid: 'userId', user_id: 'userId',
+  examname: 'examName', exam_name: 'examName',
+  examcode: 'examCode', exam_code: 'examCode',
+  knowledgename: 'knowledgeBaseName', knowledgebasename: 'knowledgeBaseName',
+  processid: 'processId', process_id: 'processId',
+  processstageid: 'processStageId', process_stage_id: 'processStageId',
+  sequenceno: 'sequenceNo', sequence_no: 'sequenceNo',
+  stagename: 'stageName', stage_name: 'stageName',
+  overallstatus: 'overallStatus', overall_status: 'overallStatus',
+  stagestatus: 'stageStatus', stage_status: 'stageStatus',
+  answerstatus: 'answerStatus', answer_status: 'answerStatus',
+  startedat: 'startedAt', started_at: 'startedAt',
+  submittedat: 'submittedAt', submitted_at: 'submittedAt',
+  questionrounds: 'questionRounds', question_rounds: 'questionRounds',
+  passingscore: 'passingScore', passing_score: 'passingScore',
+  followupthreshold: 'followUpThreshold', follow_up_threshold: 'followUpThreshold',
+  followuprounds: 'followUpRounds', follow_up_rounds: 'followUpRounds',
+  anticheatswitchlimit: 'antiCheatSwitchLimit', anti_cheat_switch_limit: 'antiCheatSwitchLimit',
+  anticheataction: 'antiCheatAction', anti_cheat_action: 'antiCheatAction',
+  anticheatswitchcount: 'antiCheatSwitchCount', anti_cheat_switch_count: 'antiCheatSwitchCount',
+  knowledgepoint: 'knowledgePoint', knowledge_point: 'knowledgePoint',
+  scorerate: 'scoreRate', score_rate: 'scoreRate',
+  lossrate: 'lossRate', loss_rate: 'lossRate',
+  answeredrounds: 'answeredRounds', answered_rounds: 'answeredRounds',
+  examcount: 'examCount', exam_count: 'examCount',
+  studentcount: 'studentCount', student_count: 'studentCount',
+  completedstudentcount: 'completedStudentCount', completed_student_count: 'completedStudentCount',
+  aisummary: 'aiSummary', ai_summary: 'aiSummary',
+  rounds: 'rounds',
+  averagescore: 'averageScore', average_score: 'averageScore',
+  interviewerscore: 'interviewerScore', interviewer_score: 'interviewerScore',
+  scorerscore: 'scorerScore', scorer_score: 'scorerScore',
+  questioncontent: 'questionContent', question_content: 'questionContent',
+  answercontent: 'answerContent', answer_content: 'answerContent',
+  interviewercomment: 'interviewerComment', interviewer_comment: 'interviewerComment',
+  attemptcount: 'attemptCount', attempt_count: 'attemptCount',
+  createdat: 'createdAt', created_at: 'createdAt',
+  updatedat: 'updatedAt', updated_at: 'updatedAt',
+}
+
+function normalizeSchoolRecord(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return record
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [
+    schoolFieldAliases[key] || key,
+    Array.isArray(value) ? value.map(normalizeSchoolRecord) : normalizeSchoolRecord(value),
+  ]))
+}
+
+function normalizeSchoolResponse(response) {
+  if (!response || !response.data || typeof response.data !== 'object') return response
+  const data = Array.isArray(response.data)
+    ? response.data.map(normalizeSchoolRecord)
+    : normalizeSchoolRecord(response.data)
+  return { ...response, data }
+}
+
 export const authApi = {
   getCaptcha() { return request.get('/auth/captcha') },
   login(payload) { return request.post('/auth/login', payload) },
@@ -108,9 +173,12 @@ export const authApi = {
   changePassword(payload) { return request.post('/auth/change-password', payload) },
   updateProfile(payload) { return request.post('/auth/profile', payload) },
   listUsers(params) { return requestPage('/auth/admin/users', params) },
+  createUser(payload) { return request.post('/auth/admin/users', payload) },
   listAuditLogs(params) { return requestPage('/auth/admin/audit-logs', params) },
   updateUser(id, payload) { return request.post(`/auth/admin/users/${id}`, payload) },
   deleteUser(id) { return request.delete(`/auth/admin/users/${id}`) },
+  importStaff(file) { const form = new FormData(); form.append('file', file); return request.post('/auth/admin/users/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
+  downloadStaffTemplate() { return request.get('/auth/admin/users/template', { responseType: 'blob' }) },
   logout() {
     return request.post('/auth/logout').finally(() => {
       clearSession()
@@ -119,24 +187,29 @@ export const authApi = {
 }
 
 export const schoolApi = {
-  listPublicClasses() { return request.get('/exams/classes') },
-  registerStudent(payload) { return request.post('/exams/student-registration', payload) },
-  listClasses(params) { return request.get('/exams/admin/classes', { params }) },
-  saveClass(payload) { return request.post('/exams/admin/classes', payload) },
+  listPublicClasses() { return request.get('/exams/classes').then(normalizeSchoolResponse) },
+  registerStudent(payload) { return request.post('/exams/student-registration', payload).then(normalizeSchoolResponse) },
+  listClasses(params) { return request.get('/exams/admin/classes', { params }).then(normalizeSchoolResponse) },
+  saveClass(payload) { return request.post('/exams/admin/classes', payload).then(normalizeSchoolResponse) },
   deleteClass(id) { return request.post(`/exams/admin/classes/${id}/delete`) },
   importClasses(file) { const form = new FormData(); form.append('file', file); return request.post('/exams/admin/classes/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
-  listStudents(params) { return request.get('/exams/admin/students', { params }) },
-  saveStudent(payload) { return request.post('/exams/admin/students', payload) },
+  downloadClassesTemplate() { return request.get('/exams/admin/classes/template', { responseType: 'blob' }) },
+  listStudents(params) { return request.get('/exams/admin/students', { params }).then(normalizeSchoolResponse) },
+  saveStudent(payload) { return request.post('/exams/admin/students', payload).then(normalizeSchoolResponse) },
+  deleteStudent(id) { return request.post(`/exams/admin/students/${id}/delete`) },
   importStudents(file) { const form = new FormData(); form.append('file', file); return request.post('/exams/admin/students/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }) },
-  listAdminExams() { return request.get('/exams/admin/exams') },
-  saveExam(payload) { return request.post('/exams/admin/exams', payload) },
+  downloadStudentsTemplate() { return request.get('/exams/admin/students/template', { responseType: 'blob' }) },
+  listAdminExams() { return request.get('/exams/admin/exams').then(normalizeSchoolResponse) },
+  saveExam(payload) { return request.post('/exams/admin/exams', payload).then(normalizeSchoolResponse) },
   deleteExam(id) { return request.post(`/exams/admin/exams/${id}/delete`) },
-  analytics(params) { return request.get('/exams/admin/analytics', { params }) },
-  getAdminAttempt(processId) { return request.get(`/exams/admin/attempts/${processId}`) },
-  listStudentExams() { return request.get('/exams/student/exams') },
-  startExam(examId) { return request.post(`/exams/student/exams/${examId}/start`) },
-  listStudentAttempts() { return request.get('/exams/student/attempts') },
-  getAttemptAnalysis(processId) { return request.get(`/exams/student/attempts/${processId}/analysis`) },
+  analytics(params) { return request.get('/exams/admin/analytics', { params }).then(normalizeSchoolResponse) },
+  getAdminAttempt(processId) { return request.get(`/exams/admin/attempts/${processId}`).then(normalizeSchoolResponse) },
+  restartAttempt(processId) { return request.post(`/exams/admin/attempts/${processId}/restart`).then(normalizeSchoolResponse) },
+  continueAttempt(processId) { return request.post(`/exams/admin/attempts/${processId}/continue`).then(normalizeSchoolResponse) },
+  listStudentExams() { return request.get('/exams/student/exams').then(normalizeSchoolResponse) },
+  startExam(examId) { return request.post(`/exams/student/exams/${examId}/start`).then(normalizeSchoolResponse) },
+  listStudentAttempts() { return request.get('/exams/student/attempts').then(normalizeSchoolResponse) },
+  getAttemptAnalysis(processId) { return request.get(`/exams/student/attempts/${processId}/analysis`).then(normalizeSchoolResponse) },
 }
 
 export const systemApi = {
@@ -308,6 +381,7 @@ export const interviewApi = {
       reader?.releaseLock()
     }
   },
+  downloadKnowledgeItemsTemplate() { return request.get('/interview/hr/knowledge-items/template', { responseType: 'blob' }) },
 }
 
 function csrfHeaders() {

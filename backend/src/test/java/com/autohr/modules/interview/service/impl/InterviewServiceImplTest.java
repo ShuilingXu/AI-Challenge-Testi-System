@@ -260,6 +260,64 @@ class InterviewServiceImplTest {
     }
 
     @Test
+    void antiCheatSubmitTerminatesTheActiveSchoolStageWithoutApproval() {
+        InterviewProcess process = schoolExamProcess("SUBMIT");
+        InterviewProcessStage stage = schoolStage(8L, "基础知识", 1, "IN_PROGRESS");
+        when(processStageMapper.selectOne(any())).thenReturn(stage);
+
+        ReflectionTestUtils.invokeMethod(service, "forceSchoolExamAfterAntiCheat", process);
+
+        assertEquals("COMPLETED", process.getOverallStatus());
+        assertEquals("TERMINATED", process.getStageStatus());
+        assertEquals("切屏超限，考试已交卷", process.getProcessStatusView());
+        assertEquals("TERMINATED", stage.getStageStatus());
+        verify(processStageMapper).updateById(stage);
+    }
+
+    @Test
+    void antiCheatNextStageMovesToTheNextAiStageImmediately() {
+        InterviewProcess process = schoolExamProcess("NEXT_STAGE");
+        InterviewProcessStage current = schoolStage(8L, "基础知识", 1, "IN_PROGRESS");
+        InterviewProcessStage next = schoolStage(9L, "综合能力", 2, "READY");
+        when(processStageMapper.selectOne(any())).thenReturn(current, next);
+
+        ReflectionTestUtils.invokeMethod(service, "forceSchoolExamAfterAntiCheat", process);
+
+        assertEquals("IN_PROGRESS", process.getOverallStatus());
+        assertEquals("AI", process.getCurrentStage());
+        assertEquals("IN_PROGRESS", process.getStageStatus());
+        assertEquals("PASSED", current.getStageStatus());
+        assertEquals("IN_PROGRESS", next.getStageStatus());
+        verify(processStageMapper).updateById(current);
+        verify(processStageMapper).updateById(next);
+    }
+
+    @Test
+    void continuingAStoppedTemplateExamResumesTheInterruptedStage() {
+        InterviewProcess process = schoolExamProcess("SUBMIT");
+        process.setOverallStatus("COMPLETED");
+        process.setStageStatus("TERMINATED");
+        process.setAntiCheatSwitchCount(4);
+        InterviewProcessStage interrupted = schoolStage(8L, "基础知识", 1, "TERMINATED");
+        InterviewProcessStage later = schoolStage(9L, "综合能力", 2, "READY");
+        RecruitmentCandidate candidate = new RecruitmentCandidate();
+        candidate.setId(7L);
+        candidate.setGraduationSchool("学校考试系统");
+        when(processMapper.selectById(42L)).thenReturn(process);
+        when(recruitmentCandidateMapper.selectSchoolCandidateById(7L)).thenReturn(candidate);
+        when(processStageMapper.selectList(any())).thenReturn(List.of(interrupted, later));
+
+        service.resetSchoolExamProcess(42L, false);
+
+        assertEquals("IN_PROGRESS", process.getOverallStatus());
+        assertEquals("IN_PROGRESS", process.getStageStatus());
+        assertEquals(0, process.getAntiCheatSwitchCount());
+        assertEquals("IN_PROGRESS", interrupted.getStageStatus());
+        assertEquals("READY", later.getStageStatus());
+        verify(processStageMapper).updateById(interrupted);
+    }
+
+    @Test
     void persistsAiRoundKnowledgePlanInTheTemplateStage() {
         InterviewKnowledgeBase knowledgeBase = new InterviewKnowledgeBase();
         knowledgeBase.setId(3L);
@@ -722,6 +780,29 @@ class InterviewServiceImplTest {
                 7L, cutoff, new SimpleTransactionStatus());
 
         assertEquals(Boolean.TRUE, changed);
+    }
+
+    private InterviewProcess schoolExamProcess(String action) {
+        InterviewProcess process = new InterviewProcess();
+        process.setId(42L);
+        process.setTemplateId(99L);
+        process.setRecruitmentCandidateId(7L);
+        process.setCurrentStage("AI");
+        process.setStageStatus("IN_PROGRESS");
+        process.setOverallStatus("IN_PROGRESS");
+        process.setAntiCheatAction(action);
+        return process;
+    }
+
+    private InterviewProcessStage schoolStage(Long id, String name, int sequence, String status) {
+        InterviewProcessStage stage = new InterviewProcessStage();
+        stage.setId(id);
+        stage.setProcessId(42L);
+        stage.setStageName(name);
+        stage.setStageType("AI");
+        stage.setSequenceNo(sequence);
+        stage.setStageStatus(status);
+        return stage;
     }
 
     private InterviewProcess activeVideoProcess(boolean template) {

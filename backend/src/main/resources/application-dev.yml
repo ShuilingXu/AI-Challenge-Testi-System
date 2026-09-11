@@ -1,6 +1,6 @@
 app:
   database:
-    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:autohr-dev.db}
+    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:school_exam-dev.db}
 
 auth:
   bootstrap:

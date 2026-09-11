@@ -1,7 +1,7 @@
 app:
   database:
     type: sqlite
-    url: jdbc:sqlite:autohr-test.db
+    url: jdbc:sqlite:school_exam-test.db
     fallback-enabled: false
 
 jwt:

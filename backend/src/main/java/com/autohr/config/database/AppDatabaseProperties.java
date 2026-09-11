@@ -9,7 +9,7 @@ public class AppDatabaseProperties {
     private String url;
     private String username;
     private String password;
-    private String sqliteFallbackUrl = "jdbc:sqlite:autohr.db";
+    private String sqliteFallbackUrl = "jdbc:sqlite:school_exam.db";
     private boolean fallbackEnabled = true;
 
     public String getType() {

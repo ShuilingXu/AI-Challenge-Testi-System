@@ -55,6 +55,21 @@ public class SystemConfigService {
         return result;
     }
 
+    /**
+     * Reads the persisted .env values without preferring the process
+     * environment. This is used by runtime reloads after an admin saves a
+     * setting, because an already-running systemd process cannot change its
+     * inherited environment.
+     */
+    public synchronized Map<String, String> loadFileConfig(String... keys) {
+        Map<String, String> envFile = readEnvFile();
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String key : keys) {
+            result.put(key, envFile.getOrDefault(key, ""));
+        }
+        return result;
+    }
+
     public synchronized void saveConfig(Map<String, String> updates) {
         Map<String, String> sanitizedUpdates = sanitizeUpdates(updates);
         if (sanitizedUpdates.isEmpty()) {

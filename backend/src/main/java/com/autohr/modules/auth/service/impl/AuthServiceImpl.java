@@ -12,6 +12,7 @@ import com.autohr.modules.auth.dto.PasswordChangeRequest;
 import com.autohr.modules.auth.dto.PasswordResetRequest;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.dto.UserAdminUpdateRequest;
+import com.autohr.modules.auth.dto.UserAdminCreateRequest;
 import com.autohr.modules.auth.entity.SysUser;
 import com.autohr.modules.auth.mapper.SysUserMapper;
 import com.autohr.modules.auth.service.AuthService;
@@ -30,18 +31,32 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private static final Set<String> DEFAULT_USERNAMES = Set.of("itadmin", "hradmin", "hruser");
-    private static final Set<String> ALLOWED_ROLE_CODES = Set.of("IT_ADMIN", "HR_ADMIN", "HR_USER", "INTERVIEWEE");
+    private static final Set<String> ALLOWED_ROLE_CODES = Set.of("IT_ADMIN", "HR_ADMIN", "HR_USER", "STUDENT", "SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
+    private static final Set<String> STAFF_ROLE_CODES = Set.of("SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
     private static final List<String> USER_REFERENCE_QUERIES = List.of(
             "SELECT COUNT(*) FROM recruitment_candidate WHERE interviewee_user_id = ?",
             "SELECT COUNT(*) FROM interview_process WHERE interviewee_user_id = ? OR approved_hr_user_id = ?",
@@ -90,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
         SysUser user = new SysUser();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRoleCode("INTERVIEWEE");
+        user.setRoleCode("STUDENT");
         user.setDisplayName(request.getDisplayName());
         user.setMobilePhone(request.getMobilePhone());
         user.setEmail(request.getEmail());
@@ -144,12 +159,19 @@ public class AuthServiceImpl implements AuthService {
                                                  String operatorRoleCode, PageQuery pageQuery) {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
                 .eq(status != null, SysUser::getStatus, status)
+                .ne(SysUser::getRoleCode, "STUDENT")
                 .and(StrUtil.isNotBlank(keyword), q -> q.like(SysUser::getUsername, keyword)
                         .or().like(SysUser::getDisplayName, keyword)
                         .or().like(SysUser::getMobilePhone, keyword))
                 .orderByAsc(SysUser::getId);
         if (StrUtil.equals(operatorRoleCode, "HR_ADMIN")) {
-            wrapper.in(SysUser::getRoleCode, "HR_USER", "INTERVIEWEE");
+            wrapper.in(SysUser::getRoleCode, "HR_USER");
+        } else if (StrUtil.equals(operatorRoleCode, "DEPARTMENT_HEAD")) {
+            wrapper.eq(SysUser::getRoleCode, "LECTURER");
+        } else if (StrUtil.equals(operatorRoleCode, "IT_ADMIN")) {
+            wrapper.in(SysUser::getRoleCode, "IT_ADMIN", "SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
+        } else if (StrUtil.equals(operatorRoleCode, "SYSTEM_ADMIN")) {
+            wrapper.in(SysUser::getRoleCode, "DEPARTMENT_HEAD", "LECTURER");
         } else {
             wrapper.eq(StrUtil.isNotBlank(roleCode), SysUser::getRoleCode, roleCode);
         }
@@ -158,19 +180,80 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public byte[] staffTemplate() {
+        try (Workbook workbook = new HSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("教职工导入");
+            String[] headers = {"用户名", "初始密码", "姓名", "后台角色", "手机号", "邮箱"};
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+                sheet.setColumnWidth(i, 20 * 256);
+            }
+            Row example = sheet.createRow(1);
+            String[] values = {"teacher001", "ChangeMe123", "示例教师", "LECTURER", "", ""};
+            for (int i = 0; i < values.length; i++) example.createCell(i).setCellValue(values[i]);
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new BusinessException("教职工模板生成失败");
+        }
+    }
+
+    @Override
+    public java.util.Map<String, Object> importStaff(MultipartFile file, String operatorRoleCode) {
+        requireTeacherImportOperator(operatorRoleCode);
+        validateWorkbook(file);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int success = 0;
+        int failure = 0;
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            Sheet sheet = workbook.getSheetAt(0);
+            if (sheet.getLastRowNum() > 5000) throw new BusinessException("单次最多导入5000行");
+            for (int index = 1; index <= sheet.getLastRowNum(); index++) {
+                Row row = sheet.getRow(index);
+                if (row == null || rowIsBlank(row)) continue;
+                try {
+                    String username = cell(row, 0);
+                    String password = cell(row, 1);
+                    String role = cell(row, 3).toUpperCase(Locale.ROOT);
+                    if (username.isBlank() || password.isBlank()) throw new BusinessException("用户名和初始密码不能为空");
+                    PasswordPolicy.requireStrongPassword(password);
+                    if (!STAFF_ROLE_CODES.contains(role)) throw new BusinessException("只能导入系统管理员、系主任或讲师");
+                    UserAdminCreateRequest request = new UserAdminCreateRequest();
+                    request.setUsername(username);
+                    request.setPassword(password);
+                    request.setDisplayName(cell(row, 2));
+                    request.setRoleCode(role);
+                    request.setMobilePhone(cell(row, 4));
+                    request.setEmail(cell(row, 5));
+                    SessionUserVO created = createUserByAdmin(request, operatorRoleCode);
+                    rows.add(Map.of("row", index + 1, "success", true, "message", "导入成功", "id", created.getId()));
+                    success++;
+                } catch (Exception ex) {
+                    rows.add(Map.of("row", index + 1, "success", false, "message", safeMessage(ex)));
+                    failure++;
+                }
+            }
+        } catch (IOException ex) {
+            throw new BusinessException("无法读取 Excel 文件");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("successCount", success);
+        result.put("failureCount", failure);
+        result.put("rows", rows);
+        return result;
+    }
+
+    @Override
     @Transactional
     public SessionUserVO updateUserByAdmin(Long id, UserAdminUpdateRequest request, String operatorRoleCode) {
         SysUser user = requireUser(id);
-        if (StrUtil.equals(operatorRoleCode, "HR_ADMIN") && !(StrUtil.equals(user.getRoleCode(), "HR_USER") || StrUtil.equals(user.getRoleCode(), "INTERVIEWEE"))) {
-            throw new BusinessException("HR管理员仅可维护HR用户和面试者用户");
-        }
+        assertAdminCanManageUser(user, operatorRoleCode);
         if (StrUtil.isNotBlank(request.getRoleCode())) {
             if (!ALLOWED_ROLE_CODES.contains(request.getRoleCode())) {
                 throw new BusinessException("不支持的用户角色");
             }
-            if (StrUtil.equals(operatorRoleCode, "HR_ADMIN") && !(StrUtil.equals(request.getRoleCode(), "HR_USER") || StrUtil.equals(request.getRoleCode(), "INTERVIEWEE"))) {
-                throw new BusinessException("HR管理员仅可授予HR用户或面试者角色");
-            }
+            if (!canManageRole(request.getRoleCode(), operatorRoleCode)) throw new BusinessException("当前角色无权授予该角色");
             user.setRoleCode(request.getRoleCode());
         }
         if (request.getStatus() != null) {
@@ -197,6 +280,30 @@ public class AuthServiceImpl implements AuthService {
         updateNormalizedContacts(user);
         ensureUniqueContacts(user.getMobilePhoneNormalized(), user.getEmailNormalized(), user.getId());
         updateUserContacts(user);
+        return toSessionUser(user);
+    }
+
+    @Override
+    @Transactional
+    public SessionUserVO createUserByAdmin(UserAdminCreateRequest request, String operatorRoleCode) {
+        String role = request.getRoleCode() == null ? "LECTURER" : request.getRoleCode().trim().toUpperCase(Locale.ROOT);
+        if (!STAFF_ROLE_CODES.contains(role)) throw new BusinessException("只能创建教职工后台角色");
+        if (!canManageRole(role, operatorRoleCode)) throw new BusinessException("当前角色无权创建该教职工角色");
+        ensureUniqueUsername(request.getUsername().trim());
+        SysUser user = new SysUser();
+        user.setUsername(request.getUsername().trim());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRoleCode(role);
+        user.setDisplayName(StrUtil.blankToDefault(request.getDisplayName(), request.getUsername()).trim());
+        user.setMobilePhone(StrUtil.blankToDefault(request.getMobilePhone(), null));
+        user.setEmail(StrUtil.blankToDefault(request.getEmail(), null));
+        updateNormalizedContacts(user);
+        ensureUniqueContacts(user.getMobilePhoneNormalized(), user.getEmailNormalized(), null);
+        user.setStatus(1);
+        user.setProfileCompleted(1);
+        user.setTokenVersion(0);
+        user.setMustChangePassword(1);
+        try { sysUserMapper.insert(user); } catch (DataIntegrityViolationException ex) { throw new BusinessException("用户信息已存在"); }
         return toSessionUser(user);
     }
 
@@ -340,10 +447,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void assertAdminCanManageUser(SysUser user, String operatorRoleCode) {
-        if (StrUtil.equals(operatorRoleCode, "HR_ADMIN")
-                && !(StrUtil.equals(user.getRoleCode(), "HR_USER") || StrUtil.equals(user.getRoleCode(), "INTERVIEWEE"))) {
-            throw new BusinessException("HR管理员仅可维护HR用户和面试者用户");
-        }
+        if (!canManageRole(user.getRoleCode(), operatorRoleCode)) throw new BusinessException("当前角色无权维护该用户");
+    }
+
+    private boolean canManageRole(String targetRole, String operatorRole) {
+        if (StrUtil.equals(operatorRole, "IT_ADMIN")) return !StrUtil.equals(targetRole, "IT_ADMIN");
+        if (StrUtil.equals(operatorRole, "SYSTEM_ADMIN")) return StrUtil.equalsAny(targetRole, "DEPARTMENT_HEAD", "LECTURER");
+        if (StrUtil.equals(operatorRole, "HR_ADMIN")) return StrUtil.equalsAny(targetRole, "HR_USER");
+        if (StrUtil.equals(operatorRole, "DEPARTMENT_HEAD")) return StrUtil.equals(targetRole, "LECTURER");
+        return false;
     }
 
     private boolean hasLinkedBusinessData(Long userId) {
@@ -364,6 +476,39 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("用户不存在: " + id);
         }
         return user;
+    }
+
+    private void requireTeacherImportOperator(String operatorRoleCode) {
+        if (!StrUtil.equalsAny(operatorRoleCode, "IT_ADMIN", "SYSTEM_ADMIN", "DEPARTMENT_HEAD")) {
+            throw new BusinessException("当前角色无权导入教职工");
+        }
+    }
+
+    private void validateWorkbook(MultipartFile file) {
+        String name = file == null ? null : file.getOriginalFilename();
+        if (file == null || file.isEmpty() || file.getSize() > 5 * 1024 * 1024 || name == null
+                || !(name.toLowerCase(Locale.ROOT).endsWith(".xls") || name.toLowerCase(Locale.ROOT).endsWith(".xlsx"))) {
+            throw new BusinessException("请上传不超过5MB的 .xls 或 .xlsx 文件");
+        }
+    }
+
+    private static boolean rowIsBlank(Row row) {
+        for (int index = 0; index < row.getLastCellNum(); index++) if (!cell(row, index).isBlank()) return false;
+        return true;
+    }
+
+    private static String cell(Row row, int index) {
+        Cell value = row.getCell(index);
+        if (value == null) return "";
+        CellType type = value.getCellType() == CellType.FORMULA ? value.getCachedFormulaResultType() : value.getCellType();
+        if (type == CellType.STRING) return value.getStringCellValue().trim();
+        if (type == CellType.NUMERIC) return java.math.BigDecimal.valueOf(value.getNumericCellValue()).stripTrailingZeros().toPlainString();
+        if (type == CellType.BOOLEAN) return Boolean.toString(value.getBooleanCellValue());
+        return "";
+    }
+
+    private static String safeMessage(Exception ex) {
+        return ex.getMessage() == null || ex.getMessage().isBlank() ? "该行数据无效" : ex.getMessage();
     }
 
     private SessionUserVO toSessionUser(SysUser user) {

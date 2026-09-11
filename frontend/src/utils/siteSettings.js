@@ -3,9 +3,11 @@ export const DEFAULT_SITE_SETTINGS = Object.freeze({
   siteTitle: '人工智能考试系统',
   siteSubtitle: '按班级组织人工智能考试与学情分析。',
   footerHtml: '人工智能考试系统',
+  footerCode: '',
+  copyright: '人工智能考试系统',
 })
 
-const limits = { logoUrl: 500, siteTitle: 120, siteSubtitle: 500, footerHtml: 500 }
+const limits = { logoUrl: 500, siteTitle: 120, siteSubtitle: 500, footerHtml: 500, footerCode: 5000, copyright: 500 }
 
 function cleanText(value, fallback, limit, allowBlank = false) {
   const text = typeof value === 'string' ? value.trim() : ''
@@ -30,6 +32,8 @@ export function normalizeSiteSettings(value = {}) {
     siteTitle: cleanText(value.siteTitle, DEFAULT_SITE_SETTINGS.siteTitle, limits.siteTitle),
     siteSubtitle: cleanText(value.siteSubtitle, DEFAULT_SITE_SETTINGS.siteSubtitle, limits.siteSubtitle),
     footerHtml: cleanText(value.footerHtml, DEFAULT_SITE_SETTINGS.footerHtml, limits.footerHtml, true),
+    footerCode: cleanText(value.footerCode, DEFAULT_SITE_SETTINGS.footerCode, limits.footerCode, true),
+    copyright: cleanText(value.copyright, DEFAULT_SITE_SETTINGS.copyright, limits.copyright, true),
   }
 }
 

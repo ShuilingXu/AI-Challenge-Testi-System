@@ -3,28 +3,32 @@ import LoginView from '../views/LoginView.vue'
 import ForcePasswordChangeView from '../views/ForcePasswordChangeView.vue'
 import SchoolAdminView from '../views/SchoolAdminView.vue'
 import SystemConfigView from '../views/SystemConfigView.vue'
+import StaffManagementView from '../views/StaffManagementView.vue'
+import SiteSettingsView from '../views/SiteSettingsView.vue'
 import KnowledgeTemplateView from '../views/KnowledgeTemplateView.vue'
 import StudentRegistrationView from '../views/StudentRegistrationView.vue'
 import StudentExamView from '../views/StudentExamView.vue'
 import ExamTakeView from '../views/ExamTakeView.vue'
 import { readSessionUser } from '../utils/session'
 
-const ADMIN_ROLES = ['IT_ADMIN', 'HR_ADMIN', 'HR_USER']
-const KNOWN_ROLES = new Set([...ADMIN_ROLES, 'INTERVIEWEE'])
+const ADMIN_ROLES = ['IT_ADMIN', 'HR_ADMIN', 'HR_USER', 'SYSTEM_ADMIN', 'DEPARTMENT_HEAD', 'LECTURER']
+const KNOWN_ROLES = new Set([...ADMIN_ROLES, 'STUDENT'])
 const routes = [
   { path: '/', redirect: '/student/register' },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/student/register', name: 'student-register', component: StudentRegistrationView },
-  { path: '/change-password', name: 'change-password', component: ForcePasswordChangeView, meta: { requiresAuth: true } },
-  { path: '/student', name: 'student-exams', component: StudentExamView, meta: { requiresAuth: true, roles: ['INTERVIEWEE'] } },
-  { path: '/exam/take/:processId', name: 'exam-take', component: ExamTakeView, meta: { requiresAuth: true, roles: ['INTERVIEWEE'] } },
+  { path: '/change-password', name: 'change-password', component: ForcePasswordChangeView, meta: { requiresAuth: true, allowOptionalPasswordChange: true } },
+  { path: '/student', name: 'student-exams', component: StudentExamView, meta: { requiresAuth: true, roles: ['STUDENT'] } },
+  { path: '/exam/take/:processId', name: 'exam-take', component: ExamTakeView, meta: { requiresAuth: true, roles: ['STUDENT'] } },
   { path: '/admin', redirect: '/admin/exams' },
   { path: '/admin/exams', name: 'admin-exams', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'exams' } },
   { path: '/admin/classes', name: 'admin-classes', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'classes' } },
   { path: '/admin/students', name: 'admin-students', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'students' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'analytics' } },
   { path: '/admin/knowledge', name: 'admin-knowledge', component: KnowledgeTemplateView, meta: { requiresAuth: true, roles: ADMIN_ROLES } },
-  { path: '/admin/settings', name: 'admin-settings', component: SystemConfigView, meta: { requiresAuth: true, roles: ['IT_ADMIN'] } },
+  { path: '/admin/settings', name: 'admin-settings', component: SystemConfigView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN'] } },
+  { path: '/admin/site-settings', name: 'admin-site-settings', component: SiteSettingsView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN'] } },
+  { path: '/admin/staff', name: 'admin-staff', component: StaffManagementView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN', 'DEPARTMENT_HEAD'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
@@ -33,8 +37,8 @@ router.beforeEach((to) => {
   const session = readSessionUser()
   if (!session || !KNOWN_ROLES.has(session.roleCode)) return '/login'
   if (Number(session.mustChangePassword) === 1 && to.name !== 'change-password') return '/change-password'
-  if (Number(session.mustChangePassword) !== 1 && to.name === 'change-password') return session.roleCode === 'INTERVIEWEE' ? '/student' : '/admin/exams'
-  if (to.meta.roles && !to.meta.roles.includes(session.roleCode)) return session.roleCode === 'INTERVIEWEE' ? '/student' : '/admin/exams'
+  if (Number(session.mustChangePassword) !== 1 && to.name === 'change-password' && !to.meta.allowOptionalPasswordChange) return session.roleCode === 'STUDENT' ? '/student' : '/admin/exams'
+  if (to.meta.roles && !to.meta.roles.includes(session.roleCode)) return session.roleCode === 'STUDENT' ? '/student' : '/admin/exams'
   return true
 })
 

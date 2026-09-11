@@ -17,6 +17,7 @@ import com.autohr.modules.school.dto.SchoolClassSaveRequest;
 import com.autohr.modules.school.dto.SchoolExamSaveRequest;
 import com.autohr.modules.school.dto.SchoolStudentSaveRequest;
 import com.autohr.modules.school.dto.StudentRegistrationRequest;
+import com.autohr.modules.system.service.SystemConfigService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -72,6 +75,9 @@ public class SchoolExamService {
 
     @Resource(name = "interviewAiExecutor")
     private org.springframework.core.task.TaskExecutor insightExecutor;
+
+    @Resource
+    private SystemConfigService systemConfigService;
 
     @Value("${school.llm.base-url:}")
     private String schoolLlmBaseUrl;
@@ -153,6 +159,28 @@ public class SchoolExamService {
         return getStudent(request.getId());
     }
 
+    @Transactional
+    public void deleteStudent(Long studentId) {
+        Map<String, Object> student = requireStudent(studentId);
+        int attemptCount = jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_attempt WHERE student_id=?", Integer.class, studentId);
+        if (attemptCount > 0) {
+            throw new BusinessException("学生已有考试记录，不能删除，请停用学生");
+        }
+        Long userId = numberOrNull(student.get("userId"));
+        if (jdbc.update("DELETE FROM school_student WHERE id=?", studentId) != 1) {
+            throw new BusinessException("学生删除失败，请刷新后重试");
+        }
+        // Registration creates an account lazily. Remove an unused account with
+        // the roster row so the student number can be registered again.
+        if (userId != null) {
+            int candidateCount = jdbc.queryForObject("SELECT COUNT(*) FROM recruitment_candidate WHERE interviewee_user_id=?", Integer.class, userId);
+            int processCount = jdbc.queryForObject("SELECT COUNT(*) FROM interview_process WHERE interviewee_user_id=?", Integer.class, userId);
+            if (candidateCount == 0 && processCount == 0) {
+                userMapper.deleteById(userId);
+            }
+        }
+    }
+
     public List<Map<String, Object>> listStudents(Long classId, String keyword) {
         String sql = "SELECT s.id, s.student_no AS studentNo, s.full_name AS fullName, s.class_id AS classId, "
                 + "s.status, s.user_id AS userId, c.major_name AS majorName, c.class_name AS className, c.class_code AS classCode "
@@ -191,6 +219,7 @@ public class SchoolExamService {
         int followUpRounds = request.getFollowUpRounds() == null ? 0 : request.getFollowUpRounds();
         int followUpThreshold = request.getFollowUpThreshold() == null ? passingScore : request.getFollowUpThreshold();
         int antiCheatSwitchLimit = request.getAntiCheatSwitchLimit() == null ? 5 : request.getAntiCheatSwitchLimit();
+        String antiCheatAction = normalizedAntiCheatAction(request.getAntiCheatAction());
         if (followUpThreshold > passingScore) throw new BusinessException("追问阈值不能高于及格分");
         String className = request.getClassId() == null ? "全体学生" : string(requireClass(request.getClassId()).get("className"));
         RecruitmentJob job;
@@ -204,16 +233,19 @@ public class SchoolExamService {
             job.setResponsibilities("学校考试 AI 答题");
             job.setPublishDate(LocalDate.now());
             job.setStatus("PUBLISHED".equals(status) ? 1 : 0);
-            jobMapper.insert(job);
-            jdbc.update("INSERT INTO school_exam(exam_code,exam_name,class_id,knowledge_base_id,process_template_id,legacy_job_id,instructions,question_rounds,passing_score,follow_up_threshold,follow_up_rounds,anti_cheat_switch_limit,publish_start,publish_end,status) "
-                            + "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            jobMapper.insertSchoolJob(job);
+            jdbc.update("INSERT INTO school_exam(exam_code,exam_name,class_id,knowledge_base_id,process_template_id,legacy_job_id,instructions,question_rounds,passing_score,follow_up_threshold,follow_up_rounds,anti_cheat_switch_limit,anti_cheat_action,publish_start,publish_end,status) "
+                            + "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     normalized(request.getExamCode()), normalized(request.getExamName()), request.getClassId(), request.getKnowledgeBaseId(),
                     request.getProcessTemplateId(), job.getId(), blankToNull(request.getInstructions()), rounds, passingScore, followUpThreshold, followUpRounds, antiCheatSwitchLimit,
-                    request.getPublishStart(), request.getPublishEnd(), status);
+                    antiCheatAction, request.getPublishStart(), request.getPublishEnd(), status);
             examId = jdbc.queryForObject("SELECT id FROM school_exam WHERE exam_code=?", Long.class, normalized(request.getExamCode()));
         } else {
             Map<String, Object> existing = requireExam(examId);
-            job = jobMapper.selectById(number(existing.get("legacyJobId")));
+            // School exams use the legacy recruitment_job table only as a question
+            // configuration record. Use the school-specific projection so this
+            // flow does not depend on retired HR-only columns.
+            job = jobMapper.selectSchoolJobById(number(existing.get("legacyJobId")));
             if (job == null) throw new BusinessException("考试关联的题目配置不存在");
             job.setJobCode(normalized(request.getExamCode()));
             job.setJobTitle(normalized(request.getExamName()));
@@ -221,11 +253,11 @@ public class SchoolExamService {
             job.setRequirements(blankToEmpty(request.getInstructions()));
             job.setResponsibilities("学校考试 AI 答题");
             job.setStatus("PUBLISHED".equals(status) ? 1 : 0);
-            jobMapper.updateById(job);
-            jdbc.update("UPDATE school_exam SET exam_code=?,exam_name=?,class_id=?,knowledge_base_id=?,process_template_id=?,instructions=?,question_rounds=?,passing_score=?,follow_up_threshold=?,follow_up_rounds=?,anti_cheat_switch_limit=?,publish_start=?,publish_end=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            jobMapper.updateSchoolJob(job);
+            jdbc.update("UPDATE school_exam SET exam_code=?,exam_name=?,class_id=?,knowledge_base_id=?,process_template_id=?,instructions=?,question_rounds=?,passing_score=?,follow_up_threshold=?,follow_up_rounds=?,anti_cheat_switch_limit=?,anti_cheat_action=?,publish_start=?,publish_end=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
                     normalized(request.getExamCode()), normalized(request.getExamName()), request.getClassId(), request.getKnowledgeBaseId(),
                     request.getProcessTemplateId(), blankToNull(request.getInstructions()), rounds, passingScore, followUpThreshold, followUpRounds, antiCheatSwitchLimit,
-                    request.getPublishStart(), request.getPublishEnd(), status, examId);
+                    antiCheatAction, request.getPublishStart(), request.getPublishEnd(), status, examId);
         }
         jdbc.update("DELETE FROM interview_job_knowledge_weight WHERE job_id=?", job.getId());
         if (request.getKnowledgeBaseId() != null) {
@@ -268,7 +300,7 @@ public class SchoolExamService {
         LocalDateTime now = LocalDateTime.now();
         rows.removeIf(row -> !isWithinPublishWindow(row, now));
         for (Map<String, Object> row : rows) {
-            List<Map<String, Object>> attempts = jdbc.queryForList("SELECT process_id AS processId, started_at AS startedAt FROM school_exam_attempt WHERE exam_id=? AND student_id=?",
+            List<Map<String, Object>> attempts = jdbc.queryForList("SELECT a.process_id AS processId, a.started_at AS startedAt, p.overall_status AS overallStatus, p.stage_status AS stageStatus, p.process_status_view AS statusView, p.anti_cheat_switch_count AS antiCheatSwitchCount FROM school_exam_attempt a JOIN interview_process p ON p.id=a.process_id WHERE a.exam_id=? AND a.student_id=?",
                     number(row.get("id")), number(student.get("id")));
             if (!attempts.isEmpty()) row.putAll(attempts.get(0));
         }
@@ -281,10 +313,7 @@ public class SchoolExamService {
         Map<String, Object> existing = singleOrNull("SELECT process_id AS processId FROM school_exam_attempt WHERE exam_id=? AND student_id=?", examId, number(student.get("id")));
         if (existing != null) return Map.of("processId", number(existing.get("processId")), "resumed", true);
         Map<String, Object> exam = requireAvailableExam(examId, number(student.get("classId")));
-        RecruitmentCandidate candidate = candidateMapper.selectOne(new LambdaQueryWrapper<RecruitmentCandidate>()
-                .eq(RecruitmentCandidate::getJobId, number(exam.get("legacyJobId")))
-                .eq(RecruitmentCandidate::getIntervieweeUserId, userId)
-                .last("LIMIT 1"));
+        RecruitmentCandidate candidate = candidateMapper.selectSchoolCandidate(number(exam.get("legacyJobId")), userId);
         if (candidate == null) {
             candidate = new RecruitmentCandidate();
             candidate.setJobId(number(exam.get("legacyJobId")));
@@ -295,11 +324,9 @@ public class SchoolExamService {
             candidate.setInterviewStageStatus("答题中");
             candidate.setIntervieweeUserId(userId);
             try {
-                candidateMapper.insert(candidate);
+                candidateMapper.insertSchoolCandidate(candidate);
             } catch (DataIntegrityViolationException ex) {
-                candidate = candidateMapper.selectOne(new LambdaQueryWrapper<RecruitmentCandidate>()
-                        .eq(RecruitmentCandidate::getJobId, number(exam.get("legacyJobId")))
-                        .eq(RecruitmentCandidate::getIntervieweeUserId, userId).last("LIMIT 1"));
+                candidate = candidateMapper.selectSchoolCandidate(number(exam.get("legacyJobId")), userId);
                 if (candidate == null) throw ex;
             }
         }
@@ -315,6 +342,8 @@ public class SchoolExamService {
         int followUpRounds = integer(exam.get("followUpRounds"));
         processRequest.setAiMaxQuestionRounds(baseRounds + Math.max(followUpRounds, 0));
         processRequest.setAntiCheatSwitchLimit(Math.max(integer(exam.get("antiCheatSwitchLimit")), 1));
+        processRequest.setAntiCheatAction(normalizedAntiCheatAction(string(exam.get("antiCheatAction"))));
+        processRequest.setAiOutputMode("SCHOOL_EXAM");
         InterviewVO process = interviewService.startInterviewProcess(processRequest);
         jdbc.update("INSERT INTO school_exam_attempt(exam_id,student_id,process_id) VALUES(?,?,?)",
                 examId, number(student.get("id")), process.getId());
@@ -325,7 +354,7 @@ public class SchoolExamService {
         Map<String, Object> student = requireStudentByUser(userId);
         List<Map<String, Object>> attempts = jdbc.queryForList("SELECT a.id,a.exam_id AS examId,a.process_id AS processId,a.started_at AS startedAt,a.submitted_at AS submittedAt, "
                         + "a.score_rate AS scoreRate,a.loss_rate AS lossRate,a.ai_summary AS aiSummary,e.exam_name AS examName,e.passing_score AS passingScore, "
-                        + "p.overall_status AS overallStatus,p.stage_status AS stageStatus,p.ai_average_score AS averageScore,p.process_status_view AS statusView "
+                        + "p.overall_status AS overallStatus,p.stage_status AS stageStatus,p.ai_average_score AS averageScore,p.process_status_view AS statusView,p.anti_cheat_switch_count AS antiCheatSwitchCount "
                         + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id JOIN interview_process p ON p.id=a.process_id "
                         + "WHERE a.student_id=? ORDER BY a.started_at DESC", number(student.get("id")));
         for (Map<String, Object> attempt : attempts) {
@@ -346,7 +375,8 @@ public class SchoolExamService {
     public Map<String, Object> analytics(Long examId, Long classId) {
         String sql = "SELECT a.id,a.exam_id AS examId,a.student_id AS studentId,a.process_id AS processId,e.exam_name AS examName, "
                 + "s.student_no AS studentNo,s.full_name AS fullName,c.class_name AS className,c.major_name AS majorName, "
-                + "p.ai_average_score AS averageScore,p.overall_status AS overallStatus,p.stage_status AS stageStatus "
+                + "p.ai_average_score AS averageScore,p.overall_status AS overallStatus,p.stage_status AS stageStatus,"
+                + "p.anti_cheat_switch_count AS antiCheatSwitchCount "
                 + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id JOIN school_student s ON s.id=a.student_id "
                 + "JOIN school_class c ON c.id=s.class_id JOIN interview_process p ON p.id=a.process_id WHERE 1=1";
         List<Object> args = new ArrayList<>();
@@ -396,7 +426,7 @@ public class SchoolExamService {
     public Map<String, Object> adminAttemptDetails(Long processId) {
         Map<String, Object> attempt = singleOrNull("SELECT a.id,a.exam_id AS examId,a.process_id AS processId,a.started_at AS startedAt,a.submitted_at AS submittedAt, "
                         + "e.exam_name AS examName,s.student_no AS studentNo,s.full_name AS fullName,c.major_name AS majorName,c.class_name AS className, "
-                        + "p.overall_status AS overallStatus,p.stage_status AS stageStatus,p.process_status_view AS statusView "
+                        + "p.overall_status AS overallStatus,p.stage_status AS stageStatus,p.process_status_view AS statusView,p.anti_cheat_switch_count AS antiCheatSwitchCount,p.anti_cheat_switch_limit AS antiCheatSwitchLimit "
                         + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id JOIN school_student s ON s.id=a.student_id "
                         + "JOIN school_class c ON c.id=s.class_id JOIN interview_process p ON p.id=a.process_id WHERE a.process_id=?", processId);
         if (attempt == null) {
@@ -412,6 +442,19 @@ public class SchoolExamService {
         attempt.put("records", records);
         attempt.put("answeredRounds", records.stream().filter(record -> "COMPLETED".equals(string(record.get("answerStatus")))).count());
         return attempt;
+    }
+
+    @Transactional
+    public Map<String, Object> resetAttempt(Long processId, boolean restart) {
+        Map<String, Object> attempt = singleOrNull("SELECT id,exam_id AS examId,student_id AS studentId FROM school_exam_attempt WHERE process_id=?", processId);
+        if (attempt == null) throw new BusinessException("考试记录不存在");
+        interviewService.resetSchoolExamProcess(processId, restart);
+        if (restart) {
+            jdbc.update("UPDATE school_exam_attempt SET started_at=CURRENT_TIMESTAMP,submitted_at=NULL,score_rate=NULL,loss_rate=NULL,ai_summary=NULL WHERE process_id=?", processId);
+        } else {
+            jdbc.update("UPDATE school_exam_attempt SET submitted_at=NULL WHERE process_id=?", processId);
+        }
+        return Map.of("processId", processId, "restart", restart);
     }
 
     @Transactional
@@ -437,7 +480,7 @@ public class SchoolExamService {
             user = new SysUser();
             user.setUsername(username);
             user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
-            user.setRoleCode("INTERVIEWEE");
+            user.setRoleCode("STUDENT");
             user.setDisplayName(string(student.get("fullName")));
             user.setStatus(1);
             user.setProfileCompleted(1);
@@ -467,6 +510,10 @@ public class SchoolExamService {
         });
     }
 
+    public byte[] classesTemplate() {
+        return workbookTemplate("班级导入", new String[]{"专业", "班级名称", "班级代码", "说明"});
+    }
+
     @Transactional
     public Map<String, Object> importStudents(MultipartFile file) {
         return importWorkbook(file, row -> {
@@ -480,6 +527,10 @@ public class SchoolExamService {
             request.setStatus(1);
             return saveStudent(request);
         });
+    }
+
+    public byte[] studentsTemplate() {
+        return workbookTemplate("学生导入", new String[]{"学号", "姓名", "班级代码"});
     }
 
     private Map<String, Object> buildAnalysis(Map<String, Object> attempt, boolean generateAi) {
@@ -513,17 +564,19 @@ public class SchoolExamService {
     }
 
     private String createInsight(String title, int scoreRate, List<Map<String, Object>> points, int rounds) {
-        if (schoolLlmApiKey == null || schoolLlmApiKey.isBlank() || schoolLlmBaseUrl == null || schoolLlmBaseUrl.isBlank()
-                || schoolLlmModel == null || schoolLlmModel.isBlank()) return fallbackInsight(title, scoreRate, points, rounds);
+        String apiKey = schoolLlmValue("SCHOOL_LLM_API_KEY", schoolLlmApiKey);
+        String baseUrl = schoolLlmValue("SCHOOL_LLM_BASE_URL", schoolLlmBaseUrl);
+        String model = schoolLlmValue("SCHOOL_LLM_MODEL", schoolLlmModel);
+        if (apiKey.isBlank() || baseUrl.isBlank() || model.isBlank()) return fallbackInsight(title, scoreRate, points, rounds);
         try {
             String pointText = points.stream().map(point -> string(point.get("knowledgePoint")) + "得分率" + point.get("scoreRate") + "%")
                     .reduce((left, right) -> left + "；" + right).orElse("暂无有效知识点数据");
-            Map<String, Object> body = Map.of("model", schoolLlmModel, "temperature", 0.2, "messages", List.of(
+            Map<String, Object> body = Map.of("model", model, "temperature", 0.2, "messages", List.of(
                     Map.of("role", "system", "content", schoolLlmPrompt("仅根据提供的考试数据，输出150字以内的中文学习诊断，明确掌握较好知识点、薄弱知识点和复习建议。不要编造数据。")),
                     Map.of("role", "user", "content", "考试：" + title + "\n已答轮数：" + rounds + "\n总得分率：" + scoreRate + "%\n知识点：" + pointText)));
             HttpRequest request = HttpRequest.newBuilder(URI.create(resolveChatUrl()))
                     .timeout(java.time.Duration.ofSeconds(20))
-                    .header("Authorization", "Bearer " + schoolLlmApiKey.trim())
+                    .header("Authorization", "Bearer " + apiKey.trim())
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8)).build();
             HttpResponse<String> response = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(8)).build()
@@ -547,24 +600,33 @@ public class SchoolExamService {
     }
 
     private String resolveChatUrl() {
-        String base = schoolLlmBaseUrl == null ? "" : schoolLlmBaseUrl.trim().replaceAll("/+$", "");
+        String base = schoolLlmValue("SCHOOL_LLM_BASE_URL", schoolLlmBaseUrl).trim().replaceAll("/+$", "");
         return base.endsWith("/chat/completions") ? base : base + "/chat/completions";
     }
 
     private String schoolLlmPrompt(String task) {
-        String base = schoolLlmSummaryPrompt == null || schoolLlmSummaryPrompt.isBlank()
-                ? schoolLlmDefaultPrompt
-                : schoolLlmSummaryPrompt;
+        String summaryPrompt = schoolLlmValue("SCHOOL_LLM_SUMMARY_PROMPT", schoolLlmSummaryPrompt);
+        String defaultPrompt = schoolLlmValue("SCHOOL_LLM_DEFAULT_PROMPT", schoolLlmDefaultPrompt);
+        String base = summaryPrompt.isBlank() ? defaultPrompt : summaryPrompt;
         if (base == null || base.isBlank()) base = "你是学校考试 AI 助手。只根据提供的业务数据工作。";
         base = base.trim();
         if (!base.contains("不允许在评价中展示具体答案")) base += "不允许在评价中展示具体答案。";
         return base + "\n" + task;
     }
 
+    private String schoolLlmValue(String key, String fallback) {
+        if (systemConfigService != null) {
+            String value = systemConfigService.loadFileConfig(key).get(key);
+            if (value != null && !value.isBlank()) return value;
+        }
+        return fallback == null ? "" : fallback;
+    }
+
     private Map<String, Object> importWorkbook(MultipartFile file, RowImporter importer) {
         if (file == null || file.isEmpty() || file.getSize() > 5 * 1024 * 1024 || file.getOriginalFilename() == null
-                || !file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
-            throw new BusinessException("请上传不超过5MB的 .xlsx 文件");
+                || !(file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xls")
+                || file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx"))) {
+            throw new BusinessException("请上传不超过5MB的 .xls 或 .xlsx 文件");
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         int success = 0;
@@ -679,7 +741,7 @@ public class SchoolExamService {
         return "SELECT e.id,e.exam_code AS examCode,e.exam_name AS examName,e.class_id AS classId,e.knowledge_base_id AS knowledgeBaseId, "
                 + "e.process_template_id AS processTemplateId,e.legacy_job_id AS legacyJobId,e.instructions,e.question_rounds AS questionRounds, "
                 + "e.passing_score AS passingScore,e.follow_up_threshold AS followUpThreshold,e.follow_up_rounds AS followUpRounds, "
-                + "e.anti_cheat_switch_limit AS antiCheatSwitchLimit,(SELECT COUNT(*) FROM school_exam_attempt a WHERE a.exam_id=e.id) AS attemptCount, "
+                + "e.anti_cheat_switch_limit AS antiCheatSwitchLimit,e.anti_cheat_action AS antiCheatAction,(SELECT COUNT(*) FROM school_exam_attempt a WHERE a.exam_id=e.id) AS attemptCount, "
                 + "e.publish_start AS publishStart,e.publish_end AS publishEnd,e.status, "
                 + "c.major_name AS majorName,c.class_name AS className,k.knowledge_base_name AS knowledgeBaseName,t.template_name AS templateName "
                 + "FROM school_exam e LEFT JOIN school_class c ON c.id=e.class_id LEFT JOIN interview_knowledge_base k ON k.id=e.knowledge_base_id "
@@ -716,6 +778,21 @@ public class SchoolExamService {
         return true;
     }
 
+    private static byte[] workbookTemplate(String sheetName, String[] headers) {
+        try (Workbook workbook = new HSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet(sheetName);
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+                sheet.setColumnWidth(i, 22 * 256);
+            }
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new BusinessException("导入模板生成失败");
+        }
+    }
+
     private static String cell(Row row, int index) {
         Cell value = row.getCell(index);
         if (value == null) return "";
@@ -740,6 +817,11 @@ public class SchoolExamService {
         String status = value == null || value.isBlank() ? "DRAFT" : value.trim().toUpperCase(Locale.ROOT);
         if (!List.of("DRAFT", "PUBLISHED", "CLOSED").contains(status)) throw new BusinessException("考试状态无效");
         return status;
+    }
+    private static String normalizedAntiCheatAction(String value) {
+        String action = value == null || value.isBlank() ? "SUBMIT" : value.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("SUBMIT", "NEXT_STAGE").contains(action)) throw new BusinessException("切屏超限动作无效");
+        return action;
     }
     private static String safeMessage(Exception ex) { return ex.getMessage() == null || ex.getMessage().isBlank() ? "该行数据无效" : ex.getMessage(); }
     private static String string(Object value) { return value == null ? "" : String.valueOf(value); }

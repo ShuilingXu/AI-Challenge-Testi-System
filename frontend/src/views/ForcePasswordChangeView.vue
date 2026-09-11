@@ -3,8 +3,8 @@
     <section class="password-change-panel">
       <header>
         <p class="page-eyebrow">账号安全</p>
-        <h1>修改初始密码</h1>
-        <p>为保护账号安全，请先设置新的登录密码。</p>
+        <h1>{{ forced ? '修改初始密码' : '修改登录密码' }}</h1>
+        <p>{{ forced ? '为保护账号安全，请先设置新的登录密码。' : '请输入当前密码和新的登录密码。' }}</p>
       </header>
       <el-form label-position="top" @submit.prevent="submit">
         <el-form-item label="当前密码">
@@ -26,20 +26,17 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '../services/api'
 import { isStrongPassword, strongPasswordMessage } from '../utils/password'
-import { writeSession } from '../utils/session'
+import { readSessionUser, writeSession } from '../utils/session'
 
 const router = useRouter()
+const forced = computed(() => Number(readSessionUser()?.mustChangePassword) === 1)
 const submitting = ref(false)
 const form = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
-
-function targetByRole(roleCode) {
-  return roleCode === 'INTERVIEWEE' ? '/student' : '/admin'
-}
 
 async function submit() {
   if (!isStrongPassword(form.newPassword)) {
@@ -55,7 +52,7 @@ async function submit() {
     const response = await authApi.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword })
     writeSession(response.data.token, response.data.user)
     ElMessage.success('密码已修改')
-    router.replace(targetByRole(response.data.user.roleCode))
+    router.replace(response.data.user.roleCode === 'STUDENT' ? '/student' : '/admin/exams')
   } catch (error) {
     ElMessage.error(error.message || '密码修改失败')
   } finally {

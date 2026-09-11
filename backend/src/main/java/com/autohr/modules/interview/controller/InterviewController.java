@@ -39,6 +39,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import javax.crypto.Mac;
@@ -147,6 +150,14 @@ public class InterviewController {
         audit(authentication, "IMPORT_KNOWLEDGE_ITEMS", "KNOWLEDGE_BASE", knowledgeBaseId,
                 "imported=" + imported);
         return ApiResponse.success(Map.of("imported", imported));
+    }
+
+    @GetMapping("/hr/knowledge-items/template")
+    public ResponseEntity<byte[]> knowledgeItemsTemplate() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=knowledge-items-template.xls")
+                .contentType(MediaType.parseMediaType("application/vnd.ms-excel"))
+                .body(interviewService.knowledgeItemsTemplate());
     }
 
     @GetMapping("/hr/knowledge-items")
@@ -297,6 +308,16 @@ public class InterviewController {
                                                          @Valid @RequestBody AntiCheatEventRequest request) {
         SessionUserVO current = currentUser(authentication);
         return ApiResponse.success(interviewService.reportAntiCheatEvent(request, current.getId(), current.getDisplayName()));
+    }
+
+    @PostMapping("/hr/processes/{processId}/reset-exam")
+    public ApiResponse<InterviewVO> resetExam(Authentication authentication,
+                                               @PathVariable Long processId,
+                                               @RequestParam(defaultValue = "false") boolean restart) {
+        InterviewVO result = interviewService.resetSchoolExamProcess(processId, restart);
+        audit(authentication, restart ? "RESTART_SCHOOL_EXAM" : "CONTINUE_SCHOOL_EXAM",
+                "INTERVIEW_PROCESS", processId, restart ? "打回考试" : "继续考试");
+        return ApiResponse.success(result);
     }
 
     @GetMapping("/hr/ai-records")

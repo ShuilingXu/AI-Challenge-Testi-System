@@ -13,7 +13,7 @@ import { writeSession } from '../utils/session'
 
 const router = useRouter(); const { siteSettings } = useSiteSettings(); const submitting = ref(false); const form = reactive({ username: '', password: '', captchaId: '', captchaCode: '' }); const captcha = reactive({ imageBase64: '' })
 async function loadCaptcha() { try { const response = await authApi.getCaptcha(); form.captchaId = response.data.captchaId; form.captchaCode = ''; captcha.imageBase64 = response.data.imageBase64 } catch (error) { ElMessage.error(error.message || '验证码加载失败') } }
-async function login() { submitting.value = true; try { const response = await authApi.login({ ...form }); writeSession(response.data.token, response.data.user); router.push(Number(response.data.user.mustChangePassword) === 1 ? '/change-password' : response.data.user.roleCode === 'INTERVIEWEE' ? '/student' : '/admin/exams') } catch (error) { ElMessage.error(error.message || '登录失败'); await loadCaptcha() } finally { submitting.value = false } }
+async function login() { submitting.value = true; try { const response = await authApi.login({ ...form }); writeSession(response.data.token, response.data.user); router.push(Number(response.data.user.mustChangePassword) === 1 ? '/change-password' : response.data.user.roleCode === 'STUDENT' ? '/student' : '/admin/exams') } catch (error) { ElMessage.error(error.message || '登录失败'); await loadCaptcha() } finally { submitting.value = false } }
 onMounted(loadCaptcha)
 </script>
 

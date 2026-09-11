@@ -117,7 +117,7 @@ app:
     url: ${DB_URL:}
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
-    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:autohr.db}
+    sqlite-fallback-url: ${SQLITE_FALLBACK_URL:jdbc:sqlite:school_exam.db}
     fallback-enabled: ${DB_FALLBACK_ENABLED:true}
   migration:
     enabled: ${MIGRATION_ENABLED:true}

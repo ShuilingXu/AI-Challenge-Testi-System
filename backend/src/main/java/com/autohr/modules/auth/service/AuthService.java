@@ -10,6 +10,8 @@ import com.autohr.modules.auth.dto.PasswordChangeRequest;
 import com.autohr.modules.auth.dto.PasswordResetRequest;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.dto.UserAdminUpdateRequest;
+import com.autohr.modules.auth.dto.UserAdminCreateRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface AuthService {
     LoginResponse login(LoginRequest request);
@@ -20,6 +22,9 @@ public interface AuthService {
     PageResponse<SessionUserVO> listUsers(String roleCode, Integer status, String keyword,
                                           String operatorRoleCode, PageQuery pageQuery);
     SessionUserVO updateUserByAdmin(Long id, UserAdminUpdateRequest request, String operatorRoleCode);
+    SessionUserVO createUserByAdmin(UserAdminCreateRequest request, String operatorRoleCode);
+    byte[] staffTemplate();
+    java.util.Map<String, Object> importStaff(MultipartFile file, String operatorRoleCode);
     void deleteUserByAdmin(Long id, Long operatorId, String operatorRoleCode);
     boolean canResetPassword(String mobilePhone, String email);
     void resetPassword(PasswordResetRequest request);

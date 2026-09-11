@@ -19,11 +19,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 
 public interface InterviewService {
+    void reloadSchoolLlmConfig();
     InterviewVO saveKnowledgeBase(KnowledgeBaseSaveRequest request);
     List<InterviewVO> listKnowledgeBases(Integer status, String keyword);
     void deleteKnowledgeBase(Long id);
     InterviewVO saveKnowledgeItem(KnowledgeItemSaveRequest request);
     int importKnowledgeItems(Long knowledgeBaseId, MultipartFile file);
+    byte[] knowledgeItemsTemplate();
     List<InterviewVO> listKnowledgeItems(Long knowledgeBaseId, String keyword);
     void deleteKnowledgeItem(Long id);
     InterviewVO saveJobKnowledgeWeight(JobKnowledgeWeightSaveRequest request);
@@ -64,6 +66,7 @@ public interface InterviewService {
     VideoSignalVO uploadIntervieweeRecording(Long processId, Long processStageId, Long intervieweeUserId, String intervieweeName, String originalFileName, String contentType, MultipartFile file);
     InterviewVO uploadAiExamRecording(Long processId, Long intervieweeUserId, String intervieweeName, String originalFileName, String contentType, MultipartFile file);
     InterviewVO reportAntiCheatEvent(AntiCheatEventRequest request, Long intervieweeUserId, String intervieweeName);
+    InterviewVO resetSchoolExamProcess(Long processId, boolean restart);
     InterviewVideoSession getVideoSession(Long processId, Long processStageId);
     InterviewVideoSession getDownloadableVideoSession(Long processId, Long processStageId);
     InterviewVO retryVideoSummary(Long processId);

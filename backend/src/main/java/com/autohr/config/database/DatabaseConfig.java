@@ -110,9 +110,9 @@ public class DatabaseConfig {
             return sqliteFallbackUrl;
         }
         return switch (type) {
-            case SQLITE -> "jdbc:sqlite:autohr.db";
-            case MYSQL -> "jdbc:mysql://localhost:3306/autohr?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=true";
-            case PGSQL -> "jdbc:postgresql://localhost:5432/autohr";
+            case SQLITE -> "jdbc:sqlite:school_exam.db";
+            case MYSQL -> "jdbc:mysql://localhost:3306/school_exam?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=true";
+            case PGSQL -> "jdbc:postgresql://localhost:5432/school_exam";
         };
     }
 

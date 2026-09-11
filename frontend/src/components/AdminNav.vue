@@ -10,6 +10,7 @@
       </div>
       <div class="admin-nav-actions">
         <span v-if="sessionUser" class="admin-user">{{ sessionUser.displayName || sessionUser.username }}</span>
+        <RouterLink class="password-link" to="/change-password">修改密码</RouterLink>
         <button type="button" class="logout-control" @click="logout">退出</button>
       </div>
     </div>
@@ -34,7 +35,9 @@ const visibleItems = computed(() => {
     { label: '学生管理', to: '/admin/students' },
     { label: '知识库与模板', to: '/admin/knowledge' },
     { label: '得分分析', to: '/admin/analytics' },
-    ...(sessionUser.value?.roleCode === 'IT_ADMIN' ? [{ label: '系统配置', to: '/admin/settings' }] : []),
+    ...(sessionUser.value?.roleCode === 'IT_ADMIN' || sessionUser.value?.roleCode === 'SYSTEM_ADMIN' || sessionUser.value?.roleCode === 'DEPARTMENT_HEAD' ? [{ label: '教职工管理', to: '/admin/staff' }] : []),
+    ...(sessionUser.value?.roleCode === 'IT_ADMIN' || sessionUser.value?.roleCode === 'SYSTEM_ADMIN' ? [{ label: '系统配置', to: '/admin/settings' }] : []),
+    ...(sessionUser.value?.roleCode === 'IT_ADMIN' || sessionUser.value?.roleCode === 'SYSTEM_ADMIN' ? [{ label: '站点信息', to: '/admin/site-settings' }] : []),
   ]
 })
 
@@ -53,6 +56,7 @@ async function logout() {
 .admin-nav-links a:hover { color: var(--primary); background: var(--primary-soft); }.admin-nav-links a.router-link-active { color: var(--primary); border-bottom-color: var(--primary); }
 .admin-nav-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }.admin-user { max-width: 120px; overflow: hidden; color: var(--text-muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .logout-control { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink-soft); cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.password-link { color: var(--primary); font-size: 13px; text-decoration: none; white-space: nowrap; }
 .logout-control:hover { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 @media (max-width:900px) { .admin-nav-inner { gap:10px;padding:0 14px }.brand-name,.admin-user { display:none }.admin-nav-links a { padding-inline:9px } }
 </style>

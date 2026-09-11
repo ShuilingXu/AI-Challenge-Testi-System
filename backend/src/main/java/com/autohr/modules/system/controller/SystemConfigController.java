@@ -4,7 +4,8 @@ import com.autohr.common.api.ApiResponse;
 import com.autohr.common.exception.BusinessException;
 import com.autohr.common.file.S3EndpointValidator;
 import com.autohr.modules.system.service.SystemConfigService;
-import lombok.RequiredArgsConstructor;
+import com.autohr.modules.interview.service.InterviewService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,7 +18,6 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/api/system")
-@RequiredArgsConstructor
 public class SystemConfigController {
 
     private static final String[] CONFIG_KEYS = {
@@ -39,6 +39,18 @@ public class SystemConfigController {
     );
 
     private final SystemConfigService systemConfigService;
+    private final InterviewService interviewService;
+
+    @Autowired
+    public SystemConfigController(SystemConfigService systemConfigService, InterviewService interviewService) {
+        this.systemConfigService = systemConfigService;
+        this.interviewService = interviewService;
+    }
+
+    // Retained for focused unit tests that only exercise S3 validation.
+    public SystemConfigController(SystemConfigService systemConfigService) {
+        this(systemConfigService, null);
+    }
 
     @GetMapping("/config")
     public ApiResponse<Map<String, String>> getConfig() {
@@ -69,9 +81,13 @@ public class SystemConfigController {
         effectiveConfig.putAll(safeUpdates);
         validateS3Config(effectiveConfig);
         systemConfigService.saveConfig(safeUpdates);
+        if (interviewService != null) interviewService.reloadSchoolLlmConfig();
         Map<String, String> config = systemConfigService.loadConfig(CONFIG_KEYS);
+        // The inherited systemd environment is immutable; reflect the values
+        // just persisted so the UI does not immediately display stale values.
+        config.putAll(safeUpdates);
         maskSecrets(config);
-        return ApiResponse.success("配置已保存，部分配置需要重启服务生效", config);
+        return ApiResponse.success("配置已保存并立即重新加载", config);
     }
 
     private void mask(Map<String, String> config, String key) {

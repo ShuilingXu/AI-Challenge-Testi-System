@@ -57,7 +57,7 @@
             <div><dt>模型</dt><dd>{{ form.SCHOOL_LLM_MODEL || '未配置' }}</dd></div>
             <div><dt>密钥</dt><dd>{{ keyState }}</dd></div>
           </dl>
-          <p>保存后会写入服务器根目录的 <code>.env</code>。模型连接和默认提示词会在服务重启后生效。</p>
+          <p>保存后会写入服务器根目录的 <code>.env</code>，并自动重新加载模型连接和提示词配置。</p>
         </aside>
       </section>
     </main>
@@ -118,7 +118,7 @@ async function saveConfig() {
   try {
     const response = await systemApi.saveConfig({ ...form })
     applyConfig(response.data || {})
-    ElMessage.success('模型配置已保存，重启服务后将使用新的连接参数')
+    ElMessage.success('模型配置已保存并自动重新加载')
   } catch (error) {
     ElMessage.error(error.message || '保存模型配置失败')
   } finally {

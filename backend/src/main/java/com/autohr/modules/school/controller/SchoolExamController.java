@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Map;
@@ -71,6 +74,11 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.importClasses(file));
     }
 
+    @GetMapping("/admin/classes/template")
+    public ResponseEntity<byte[]> classesTemplate() {
+        return templateResponse("classes-import-template.xls", schoolExamService.classesTemplate());
+    }
+
     @GetMapping("/admin/students")
     public ApiResponse<List<Map<String, Object>>> listStudents(@RequestParam(required = false) Long classId,
                                                                  @RequestParam(required = false) String keyword) {
@@ -82,9 +90,20 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.saveStudent(request));
     }
 
+    @PostMapping("/admin/students/{studentId}/delete")
+    public ApiResponse<Void> deleteStudent(@PathVariable Long studentId) {
+        schoolExamService.deleteStudent(studentId);
+        return ApiResponse.success("deleted", null);
+    }
+
     @PostMapping("/admin/students/import")
     public ApiResponse<Map<String, Object>> importStudents(@RequestParam("file") MultipartFile file) {
         return ApiResponse.success(schoolExamService.importStudents(file));
+    }
+
+    @GetMapping("/admin/students/template")
+    public ResponseEntity<byte[]> studentsTemplate() {
+        return templateResponse("students-import-template.xls", schoolExamService.studentsTemplate());
     }
 
     @GetMapping("/admin/exams")
@@ -114,6 +133,16 @@ public class SchoolExamController {
         return ApiResponse.success(schoolExamService.adminAttemptDetails(processId));
     }
 
+    @PostMapping("/admin/attempts/{processId}/restart")
+    public ApiResponse<Map<String, Object>> restartAttempt(@PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.resetAttempt(processId, true));
+    }
+
+    @PostMapping("/admin/attempts/{processId}/continue")
+    public ApiResponse<Map<String, Object>> continueAttempt(@PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.resetAttempt(processId, false));
+    }
+
     @GetMapping("/student/exams")
     public ApiResponse<List<Map<String, Object>>> studentExams(Authentication authentication) {
         return ApiResponse.success(schoolExamService.listStudentExams(current(authentication).getId()));
@@ -136,5 +165,12 @@ public class SchoolExamController {
 
     private SessionUserVO current(Authentication authentication) {
         return authService.loadUserByUsername(authentication.getName());
+    }
+
+    private ResponseEntity<byte[]> templateResponse(String filename, byte[] content) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.parseMediaType("application/vnd.ms-excel"))
+                .body(content);
     }
 }

@@ -13,6 +13,7 @@ import com.autohr.modules.auth.dto.PasswordChangeRequest;
 import com.autohr.modules.auth.dto.PasswordResetRequest;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.dto.UserAdminUpdateRequest;
+import com.autohr.modules.auth.dto.UserAdminCreateRequest;
 import com.autohr.modules.auth.dto.VerificationCodeRequest;
 import com.autohr.modules.auth.service.AuthService;
 import com.autohr.modules.auth.service.AuthRateLimitService;
@@ -33,6 +34,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -143,6 +149,30 @@ public class AuthController {
         String action = request.getNewPassword() == null || request.getNewPassword().isBlank() ? "UPDATE_USER" : "RESET_USER_PASSWORD";
         auditLogService.log(current.getId(), current.getDisplayName(), current.getRoleCode(), "ADMIN", action, "SYS_USER", String.valueOf(updated.getId()), updated.getUsername());
         return ApiResponse.success(updated);
+    }
+
+    @PostMapping("/admin/users")
+    public ApiResponse<SessionUserVO> createUser(Authentication authentication,
+                                                  @Valid @RequestBody UserAdminCreateRequest request) {
+        SessionUserVO current = authService.loadUserByUsername(authentication.getName());
+        SessionUserVO created = authService.createUserByAdmin(request, current.getRoleCode());
+        auditLogService.log(current.getId(), current.getDisplayName(), current.getRoleCode(), "ADMIN", "CREATE_USER", "SYS_USER", String.valueOf(created.getId()), created.getUsername());
+        return ApiResponse.success(created);
+    }
+
+    @GetMapping("/admin/users/template")
+    public ResponseEntity<byte[]> staffTemplate() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=staff-import-template.xls")
+                .contentType(MediaType.parseMediaType("application/vnd.ms-excel"))
+                .body(authService.staffTemplate());
+    }
+
+    @PostMapping(value = "/admin/users/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<java.util.Map<String, Object>> importStaff(Authentication authentication,
+                                                                    @RequestPart("file") MultipartFile file) {
+        SessionUserVO current = authService.loadUserByUsername(authentication.getName());
+        return ApiResponse.success(authService.importStaff(file, current.getRoleCode()));
     }
 
     @DeleteMapping("/admin/users/{id}")

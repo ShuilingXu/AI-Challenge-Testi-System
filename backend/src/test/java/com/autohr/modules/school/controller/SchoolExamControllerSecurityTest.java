@@ -99,7 +99,7 @@ class SchoolExamControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "student_2026001", authorities = "ROLE_INTERVIEWEE")
+    @WithMockUser(username = "student_2026001", authorities = "ROLE_STUDENT")
     void studentsCanStartOnlyTheirOwnExamSession() throws Exception {
         SessionUserVO student = new SessionUserVO();
         student.setId(88L);
@@ -118,7 +118,7 @@ class SchoolExamControllerSecurityTest {
     @Test
     void rosterRegistrationWritesTheStudentSessionCookie() throws Exception {
         SessionUserVO student = new SessionUserVO();
-        student.setRoleCode("INTERVIEWEE");
+        student.setRoleCode("STUDENT");
         when(schoolExamService.registerStudent(any())).thenReturn(Map.of("token", "student-session-token", "user", student));
 
         mockMvc.perform(post("/api/exams/student-registration")
@@ -127,7 +127,7 @@ class SchoolExamControllerSecurityTest {
                         .cookie(new Cookie("AUTOHR_CSRF", "test-csrf-token"))
                         .header("X-CSRF-Token", "test-csrf-token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.user.roleCode").value("INTERVIEWEE"));
+                .andExpect(jsonPath("$.data.user.roleCode").value("STUDENT"));
 
         verify(authCookieService).write(any(), eq("student-session-token"));
     }
@@ -140,7 +140,7 @@ class SchoolExamControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(authorities = "ROLE_INTERVIEWEE")
+    @WithMockUser(authorities = "ROLE_STUDENT")
     void studentsCannotAccessRetiredVideoInterviewEndpoints() throws Exception {
         mockMvc.perform(get("/api/interview/interviewee/video-state/41"))
                 .andExpect(status().isForbidden());

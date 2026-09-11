@@ -71,6 +71,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 migrateInterviewVideoSessionColumns(connection, statement);
                 migrateInterviewProcessStageColumns(connection, statement);
                 migrateInterviewLlmConfigColumns(connection, statement);
+                migrateRecruitmentJobColumns(connection, statement);
                 migrateSchoolExamColumns(connection, statement);
                 migrateSysUserColumns(connection, statement);
                 migrateReferentialIntegrityConstraints(connection, statement);
@@ -185,6 +186,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         addColumnIfMissing(connection, statement, "interview_process", "ai_max_question_rounds", "INTEGER NOT NULL DEFAULT 10");
         addColumnIfMissing(connection, statement, "interview_process", "anti_cheat_switch_limit", "INTEGER NOT NULL DEFAULT 5");
         addColumnIfMissing(connection, statement, "interview_process", "anti_cheat_switch_count", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(connection, statement, "interview_process", "anti_cheat_action", "VARCHAR(16) NOT NULL DEFAULT 'SUBMIT'");
         addColumnIfMissing(connection, statement, "interview_process", "ai_output_mode", "VARCHAR(16) NOT NULL DEFAULT 'NORMAL'");
         addColumnIfMissing(connection, statement, "interview_process", "remark", "VARCHAR(2000)");
         addColumnIfMissing(connection, statement, "interview_process", "ai_recording_path", "VARCHAR(500)");
@@ -198,6 +200,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         addColumnIfMissing(connection, statement, "school_exam", "follow_up_threshold", "INTEGER");
         addColumnIfMissing(connection, statement, "school_exam", "follow_up_rounds", "INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing(connection, statement, "school_exam", "anti_cheat_switch_limit", "INTEGER NOT NULL DEFAULT 5");
+        addColumnIfMissing(connection, statement, "school_exam", "anti_cheat_action", "VARCHAR(16) NOT NULL DEFAULT 'SUBMIT'");
     }
 
     private void migrateInterviewProcessTemplateColumns(Connection connection, Statement statement) throws SQLException {
@@ -615,6 +618,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 + "CASE WHEN mobile_phone IS NULL OR TRIM(mobile_phone) = '' THEN NULL ELSE TRIM(mobile_phone) END");
         statement.executeUpdate("UPDATE sys_user SET email_normalized = "
                 + "CASE WHEN email IS NULL OR TRIM(email) = '' THEN NULL ELSE LOWER(TRIM(email)) END");
+        statement.executeUpdate("UPDATE sys_user SET role_code='STUDENT' WHERE role_code='INTERVIEWEE'");
         assertNoDuplicateNormalizedContacts(statement, "mobile_phone_normalized", "mobile phone");
         assertNoDuplicateNormalizedContacts(statement, "email_normalized", "email");
     }

@@ -65,7 +65,7 @@ class InterviewControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "student_2026001", authorities = "ROLE_INTERVIEWEE")
+    @WithMockUser(username = "student_2026001", authorities = "ROLE_STUDENT")
     void studentsCanReportAntiCheatEventsForTheirOwnProcess() throws Exception {
         SessionUserVO student = new SessionUserVO();
         student.setId(88L);
@@ -81,6 +81,23 @@ class InterviewControllerSecurityTest {
                 .andExpect(status().isOk());
 
         verify(interviewService).reportAntiCheatEvent(any(), eq(88L), eq("Ada"));
+    }
+
+    @Test
+    @WithMockUser(username = "student_2026001", authorities = "ROLE_STUDENT")
+    void studentsCanSendHeartbeatForTheirOwnProcess() throws Exception {
+        SessionUserVO student = new SessionUserVO();
+        student.setId(88L);
+        student.setDisplayName("Ada");
+        when(authService.loadUserByUsername("student_2026001")).thenReturn(student);
+        when(interviewService.heartbeat(eq(41L), eq(88L))).thenReturn(new InterviewVO());
+
+        mockMvc.perform(post("/api/interview/interviewee/heartbeat/41")
+                        .cookie(new jakarta.servlet.http.Cookie("AUTOHR_CSRF", "test-csrf-token"))
+                        .header("X-CSRF-Token", "test-csrf-token"))
+                .andExpect(status().isOk());
+
+        verify(interviewService).heartbeat(eq(41L), eq(88L));
     }
 
     @Test

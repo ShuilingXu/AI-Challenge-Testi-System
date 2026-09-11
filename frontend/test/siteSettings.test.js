@@ -20,6 +20,8 @@ test('normalizes supported site settings fields', () => {
     siteTitle: 'Example HR',
     siteSubtitle: 'People operations',
     footerHtml: '<b>Rendered as text</b>',
+    footerCode: '',
+    copyright: '',
   })
 })
 
@@ -42,19 +44,21 @@ test('blank required fields fall back while footer remains plain text data', () 
   assert.equal(settings.siteTitle, DEFAULT_SITE_SETTINGS.siteTitle)
   assert.equal(settings.siteSubtitle, DEFAULT_SITE_SETTINGS.siteSubtitle)
   assert.equal(settings.footerHtml, '<script>alert(1)</script>')
-  assert.equal(siteInitials(settings.siteTitle), '千早')
+  assert.equal(siteInitials(settings.siteTitle), '人工')
 })
 
-test('public footer is interpolated and never rendered with v-html', () => {
-  const homeView = readFileSync(new URL('../src/views/HomeView.vue', import.meta.url), 'utf8')
+test('global footer is interpolated and never rendered with v-html', () => {
+  const appView = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const footerView = readFileSync(new URL('../src/components/SiteFooter.vue', import.meta.url), 'utf8')
 
-  assert.match(homeView, /\{\{\s*siteSettings\.footerHtml\s*\}\}/)
-  assert.doesNotMatch(homeView, /v-html/)
+  assert.match(appView, /<SiteFooter\s*\/>/)
+  assert.match(footerView, /\{\{\s*siteSettings\.footerHtml\s*\}\}/)
+  assert.doesNotMatch(footerView, /v-html/)
 })
 
-test('long custom branding stays inside the home header and footer', () => {
-  const homeView = readFileSync(new URL('../src/views/HomeView.vue', import.meta.url), 'utf8')
+test('long custom footer content stays inside the global footer', () => {
+  const footerView = readFileSync(new URL('../src/components/SiteFooter.vue', import.meta.url), 'utf8')
 
-  assert.match(homeView, /\.site-header \{[^}]*min-height:\s*82px/)
-  assert.match(homeView, /\.site-footer > span \{[^}]*overflow-wrap:\s*anywhere/)
+  assert.match(footerView, /\.footer-copy \{[^}]*overflow-wrap:\s*anywhere/)
+  assert.match(footerView, /sandbox=""/)
 })

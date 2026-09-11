@@ -12,11 +12,14 @@ import com.autohr.modules.interview.dto.InterviewVO;
 import com.autohr.modules.interview.dto.StartInterviewProcessRequest;
 import com.autohr.modules.interview.service.InterviewService;
 import com.autohr.modules.recruitment.entity.RecruitmentCandidate;
+import com.autohr.modules.recruitment.entity.RecruitmentJob;
 import com.autohr.modules.recruitment.mapper.RecruitmentCandidateMapper;
 import com.autohr.modules.recruitment.mapper.RecruitmentJobMapper;
 import com.autohr.modules.school.dto.SchoolClassSaveRequest;
+import com.autohr.modules.school.dto.SchoolExamSaveRequest;
 import com.autohr.modules.school.dto.StudentRegistrationRequest;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -52,6 +55,7 @@ class SchoolExamServiceTest {
     private SysUserMapper userMapper;
     private JwtService jwtService;
     private RecruitmentCandidateMapper candidateMapper;
+    private RecruitmentJobMapper jobMapper;
     private InterviewService interviewService;
     private SchoolExamService service;
 
@@ -65,11 +69,12 @@ class SchoolExamServiceTest {
         userMapper = mock(SysUserMapper.class);
         jwtService = mock(JwtService.class);
         candidateMapper = mock(RecruitmentCandidateMapper.class);
+        jobMapper = mock(RecruitmentJobMapper.class);
         interviewService = mock(InterviewService.class);
         service = new SchoolExamService(
                 jdbc,
                 userMapper,
-                mock(RecruitmentJobMapper.class),
+                jobMapper,
                 candidateMapper,
                 interviewService,
                 new BCryptPasswordEncoder(),
@@ -98,6 +103,15 @@ class SchoolExamServiceTest {
         assertFalse((Boolean) rows.get(1).get("success"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_class", Integer.class));
         assertEquals("CS-1", jdbc.queryForObject("SELECT class_code FROM school_class", String.class));
+    }
+
+    @Test
+    void generatesLegacyXlsTemplates() throws Exception {
+        assertTrue(service.classesTemplate().length > 100);
+        assertTrue(service.studentsTemplate().length > 100);
+        try (HSSFWorkbook workbook = new HSSFWorkbook(new java.io.ByteArrayInputStream(service.classesTemplate()))) {
+            assertEquals("专业", workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
+        }
     }
 
     @Test
@@ -175,6 +189,20 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void deletesAStudentWithoutExamAttempts() {
+        jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
+                "Computer Science", "Class 1", "CS-1");
+        long classId = jdbc.queryForObject("SELECT id FROM school_class WHERE class_code='CS-1'", Long.class);
+        jdbc.update("INSERT INTO school_student(student_no,full_name,class_id,status) VALUES(?,?,?,1)",
+                "2026001", "Ada", classId);
+        long studentId = jdbc.queryForObject("SELECT id FROM school_student WHERE student_no='2026001'", Long.class);
+
+        service.deleteStudent(studentId);
+
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM school_student WHERE id=?", Integer.class, studentId));
+    }
+
+    @Test
     void deletesAnExamThatHasNotBeenStarted() {
         long examId = seedDeletableExam();
         jdbc.update("INSERT INTO interview_job_knowledge_weight(job_id,knowledge_base_id,weight) VALUES(?,?,?)", 61L, 1L, 100);
@@ -190,7 +218,7 @@ class SchoolExamServiceTest {
     void refusesToDeleteAnExamWithAnAttempt() {
         long examId = seedDeletableExam();
         jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(?,?,?,?,1)",
-                71L, "student_delete", "not-used", "INTERVIEWEE");
+                71L, "student_delete", "not-used", "STUDENT");
         jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code,status) VALUES(?,?,?,?,1)",
                 71L, "Computer Science", "Class 71", "CS-71");
         jdbc.update("INSERT INTO school_student(id,student_no,full_name,class_id,user_id,status) VALUES(?,?,?,?,?,1)",
@@ -205,6 +233,33 @@ class SchoolExamServiceTest {
 
         assertTrue(error.getMessage().contains("已有答题记录"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_exam WHERE id=?", Integer.class, examId));
+    }
+
+    @Test
+    void publishingAnExistingExamUsesTheSchoolJobProjection() {
+        jdbc.update("INSERT INTO recruitment_job(id,job_code,job_title,department_name,requirements,responsibilities,publish_date,status) "
+                        + "VALUES(?,?,?,?,?,?,?,1)", 81L, "EX-PUBLISH", "Draft exam", "All students", "", "School exam", "2026-08-16");
+        jdbc.update("INSERT INTO school_exam(id,exam_code,exam_name,legacy_job_id,question_rounds,passing_score,status) "
+                        + "VALUES(?,?,?,?,?,?,?)", 81L, "EX-PUBLISH", "Draft exam", 81L, 5, 60, "DRAFT");
+        RecruitmentJob job = new RecruitmentJob();
+        job.setId(81L);
+        job.setJobCode("EX-PUBLISH");
+        job.setJobTitle("Draft exam");
+        job.setDepartmentName("All students");
+        when(jobMapper.selectSchoolJobById(81L)).thenReturn(job);
+
+        SchoolExamSaveRequest request = new SchoolExamSaveRequest();
+        request.setId(81L);
+        request.setExamCode("EX-PUBLISH");
+        request.setExamName("Published exam");
+        request.setStatus("PUBLISHED");
+
+        Map<String, Object> saved = service.saveExam(request);
+
+        assertEquals("Published exam", saved.get("examName"));
+        verify(jobMapper).selectSchoolJobById(81L);
+        verify(jobMapper).updateSchoolJob(job);
+        verify(jobMapper, org.mockito.Mockito.never()).selectById(81L);
     }
 
     @Test
@@ -229,7 +284,7 @@ class SchoolExamServiceTest {
         ArgumentCaptor<SysUser> user = ArgumentCaptor.forClass(SysUser.class);
         verify(userMapper).insert(user.capture());
         assertEquals("student_2026001", user.getValue().getUsername());
-        assertEquals("INTERVIEWEE", user.getValue().getRoleCode());
+        assertEquals("STUDENT", user.getValue().getRoleCode());
 
         assertThrows(BusinessException.class, () -> service.registerStudent(registration("2026001", "Grace", 1L)));
     }
@@ -286,7 +341,7 @@ class SchoolExamServiceTest {
         jdbc.update("INSERT INTO interview_ai_record(process_id,knowledge_point,question_content,question_status,answer_status,average_score,sequence_no) "
                         + "VALUES(?,?,?,?,?,?,?)", 41L, "Java", "Question 1", "READY", "COMPLETED", 80, 1);
         jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(?,?,?,?,1)",
-                89L, "student_2026002", "not-used", "INTERVIEWEE");
+                89L, "student_2026002", "not-used", "STUDENT");
         jdbc.update("INSERT INTO school_student(id,student_no,full_name,class_id,user_id,status) VALUES(?,?,?,?,?,1)",
                 10L, "2026002", "Grace", 1L, 89L);
         jdbc.update("INSERT INTO recruitment_candidate(id,job_id,full_name,mobile_phone,major,application_status,interview_stage_status,interviewee_user_id) "
@@ -302,6 +357,35 @@ class SchoolExamServiceTest {
         assertEquals(80, analytics.get("scoreRate"));
         assertEquals(20, analytics.get("lossRate"));
         assertEquals(2, rows(analytics.get("students")).size());
+    }
+
+    @Test
+    void classAnalyticsIncludesTheStudentAntiCheatSwitchCount() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE interview_process SET anti_cheat_switch_count=? WHERE id=?", 3, 41L);
+
+        Map<String, Object> analytics = service.analytics(31L, 1L);
+
+        List<Map<String, Object>> students = rows(analytics.get("students"));
+        assertEquals(3, ((Number) students.get(0).get("antiCheatSwitchCount")).intValue());
+    }
+
+    @Test
+    void resettingAnAttemptClearsSubmissionMetadata() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam_attempt SET submitted_at=CURRENT_TIMESTAMP,score_rate=80,loss_rate=20,ai_summary='old' WHERE process_id=?", 41L);
+        doAnswer(invocation -> {
+            InterviewVO result = new InterviewVO();
+            result.setId(41L);
+            return result;
+        }).when(interviewService).resetSchoolExamProcess(41L, true);
+
+        service.resetAttempt(41L, true);
+
+        assertNull(jdbc.queryForObject("SELECT submitted_at FROM school_exam_attempt WHERE process_id=?", String.class, 41L));
+        assertNull(jdbc.queryForObject("SELECT score_rate FROM school_exam_attempt WHERE process_id=?", Integer.class, 41L));
+        assertNull(jdbc.queryForObject("SELECT loss_rate FROM school_exam_attempt WHERE process_id=?", Integer.class, 41L));
+        assertNull(jdbc.queryForObject("SELECT ai_summary FROM school_exam_attempt WHERE process_id=?", String.class, 41L));
     }
 
     @Test
@@ -341,7 +425,7 @@ class SchoolExamServiceTest {
             RecruitmentCandidate candidate = invocation.getArgument(0);
             candidate.setId(21L);
             return 1;
-        }).when(candidateMapper).insert(any(RecruitmentCandidate.class));
+        }).when(candidateMapper).insertSchoolCandidate(any(RecruitmentCandidate.class));
         InterviewVO started = new InterviewVO();
         started.setId(41L);
         when(interviewService.startInterviewProcess(any(StartInterviewProcessRequest.class))).thenReturn(started);
@@ -359,7 +443,7 @@ class SchoolExamServiceTest {
 
     private void seedStartableExam(int passingScore) {
         jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(?,?,?,?,1)",
-                88L, "student_2026002", "not-used", "INTERVIEWEE");
+                88L, "student_2026002", "not-used", "STUDENT");
         jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code,status) VALUES(?,?,?,?,1)",
                 1L, "Computer Science", "Class 2", "CS-2");
         jdbc.update("INSERT INTO school_student(id,student_no,full_name,class_id,user_id,status) VALUES(?,?,?,?,?,1)",
@@ -380,7 +464,7 @@ class SchoolExamServiceTest {
 
     private void seedCompletedAttempt() {
         jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(?,?,?,?,1)",
-                88L, "student_2026001", "not-used", "INTERVIEWEE");
+                88L, "student_2026001", "not-used", "STUDENT");
         jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code,status) VALUES(?,?,?,?,1)",
                 1L, "Computer Science", "Class 1", "CS-1");
         jdbc.update("INSERT INTO school_student(id,student_no,full_name,class_id,user_id,status) VALUES(?,?,?,?,?,1)",

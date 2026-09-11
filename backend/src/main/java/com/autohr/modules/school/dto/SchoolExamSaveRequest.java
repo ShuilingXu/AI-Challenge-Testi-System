@@ -46,6 +46,7 @@ public class SchoolExamSaveRequest {
     @Min(value = 1, message = "允许切屏次数至少为1")
     @Max(value = 20, message = "允许切屏次数不能超过20")
     private Integer antiCheatSwitchLimit;
+    private String antiCheatAction;
     private LocalDateTime publishStart;
     private LocalDateTime publishEnd;
     private String status;

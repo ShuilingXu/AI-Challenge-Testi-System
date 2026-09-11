@@ -98,7 +98,9 @@ public class SiteSettingsService {
                 cleanLogoUrl(settings.logoUrl()),
                 cleanRequired(settings.siteTitle(), DEFAULT_SETTINGS.siteTitle()),
                 cleanRequired(settings.siteSubtitle(), DEFAULT_SETTINGS.siteSubtitle()),
-                cleanOptional(settings.footerHtml()));
+                cleanOptional(settings.footerHtml()),
+                cleanOptional(settings.footerCode()),
+                cleanOptional(settings.copyright()));
     }
 
     private String cleanLogoUrl(String value) {
