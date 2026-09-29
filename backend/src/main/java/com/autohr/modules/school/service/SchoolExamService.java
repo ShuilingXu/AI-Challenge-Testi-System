@@ -216,7 +216,12 @@ public class SchoolExamService {
         String status = normalizedStatus(request.getStatus());
         int rounds = request.getQuestionRounds() == null ? 5 : request.getQuestionRounds();
         int passingScore = request.getPassingScore() == null ? 60 : request.getPassingScore();
-        int followUpRounds = request.getFollowUpRounds() == null ? 0 : request.getFollowUpRounds();
+        int legacyExtraRounds = request.getFollowUpRounds() == null ? 0 : request.getFollowUpRounds();
+        int maxQuestionRounds = request.getMaxQuestionRounds() == null ? rounds + legacyExtraRounds : request.getMaxQuestionRounds();
+        if (maxQuestionRounds < rounds || maxQuestionRounds > Math.min(40, rounds + 20)) {
+            throw new BusinessException("最多答题轮数必须介于基础答题轮数和基础答题轮数加20轮之间，且不能超过40轮");
+        }
+        int followUpRounds = maxQuestionRounds - rounds;
         int followUpThreshold = request.getFollowUpThreshold() == null ? passingScore : request.getFollowUpThreshold();
         int antiCheatSwitchLimit = request.getAntiCheatSwitchLimit() == null ? 5 : request.getAntiCheatSwitchLimit();
         String antiCheatAction = normalizedAntiCheatAction(request.getAntiCheatAction());
@@ -385,10 +390,12 @@ public class SchoolExamService {
         List<Map<String, Object>> attempts = jdbc.queryForList(sql + " ORDER BY a.started_at DESC", args.toArray());
         List<Map<String, Object>> students = new ArrayList<>();
         Map<String, PointAggregate> points = new LinkedHashMap<>();
+        List<Map<String, Object>> feedbackRecords = new ArrayList<>();
         int scoreTotal = 0;
         int completedCount = 0;
         for (Map<String, Object> attempt : attempts) {
-            Map<String, Object> analysis = buildAnalysis(attempt, false);
+            Map<String, Object> analysis = buildAnalysis(attempt, false,
+                    "COMPLETED".equals(string(attempt.get("overallStatus"))) ? feedbackRecords : null);
             attempt.put("scoreRate", analysis.get("scoreRate"));
             attempt.put("lossRate", analysis.get("lossRate"));
             attempt.put("aiSummary", analysis.get("aiSummary"));
@@ -420,7 +427,7 @@ public class SchoolExamService {
         response.put("knowledgePoints", pointRows);
         response.put("students", students);
         response.put("aiSummary", createInsight("班级考试", scoreRate, pointRows,
-                pointRows.stream().mapToInt(point -> integer(point.get("rounds"))).sum(), List.of()));
+                pointRows.stream().mapToInt(point -> integer(point.get("rounds"))).sum(), feedbackRecords));
         return response;
     }
 
@@ -535,9 +542,21 @@ public class SchoolExamService {
     }
 
     private Map<String, Object> buildAnalysis(Map<String, Object> attempt, boolean generateAi) {
+        return buildAnalysis(attempt, generateAi, null);
+    }
+
+    private Map<String, Object> buildAnalysis(Map<String, Object> attempt, boolean generateAi,
+                                               List<Map<String, Object>> feedbackRecords) {
         Long processId = number(attempt.get("processId"));
         List<Map<String, Object>> records = jdbc.queryForList("SELECT COALESCE(NULLIF(knowledge_point,''),'未分类') AS knowledgePoint, average_score AS averageScore, interviewer_comment AS feedback "
                 + "FROM interview_ai_record WHERE process_id=? AND answer_status='COMPLETED' ORDER BY sequence_no", processId);
+        if (feedbackRecords != null) {
+            records.stream().filter(record -> !string(record.get("feedback")).isBlank()).forEach(record -> {
+                feedbackRecords.add(record);
+                feedbackRecords.sort(java.util.Comparator.comparingInt(item -> integer(item.get("averageScore"))));
+                if (feedbackRecords.size() > 8) feedbackRecords.remove(feedbackRecords.size() - 1);
+            });
+        }
         Map<String, PointAggregate> points = new LinkedHashMap<>();
         int total = 0;
         for (Map<String, Object> record : records) {
@@ -747,6 +766,7 @@ public class SchoolExamService {
         return "SELECT e.id,e.exam_code AS examCode,e.exam_name AS examName,e.class_id AS classId,e.knowledge_base_id AS knowledgeBaseId, "
                 + "e.process_template_id AS processTemplateId,e.legacy_job_id AS legacyJobId,e.instructions,e.question_rounds AS questionRounds, "
                 + "e.passing_score AS passingScore,e.follow_up_threshold AS followUpThreshold,e.follow_up_rounds AS followUpRounds, "
+                + "(e.question_rounds + e.follow_up_rounds) AS maxQuestionRounds, "
                 + "e.anti_cheat_switch_limit AS antiCheatSwitchLimit,e.anti_cheat_action AS antiCheatAction,(SELECT COUNT(*) FROM school_exam_attempt a WHERE a.exam_id=e.id) AS attemptCount, "
                 + "e.publish_start AS publishStart,e.publish_end AS publishEnd,e.status, "
                 + "c.major_name AS majorName,c.class_name AS className,k.knowledge_base_name AS knowledgeBaseName,t.template_name AS templateName "

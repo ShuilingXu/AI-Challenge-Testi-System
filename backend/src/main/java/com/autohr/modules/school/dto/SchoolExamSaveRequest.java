@@ -31,6 +31,10 @@ public class SchoolExamSaveRequest {
     @Max(value = 20, message = "答题轮数不能超过20")
     private Integer questionRounds;
 
+    @Min(value = 1, message = "最多答题轮数至少为1")
+    @Max(value = 40, message = "最多答题轮数不能超过40")
+    private Integer maxQuestionRounds;
+
     @Min(value = 0, message = "及格分不能低于0")
     @Max(value = 100, message = "及格分不能高于100")
     private Integer passingScore;

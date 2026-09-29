@@ -125,6 +125,7 @@ const schoolFieldAliases = {
   startedat: 'startedAt', started_at: 'startedAt',
   submittedat: 'submittedAt', submitted_at: 'submittedAt',
   questionrounds: 'questionRounds', question_rounds: 'questionRounds',
+  maxquestionrounds: 'maxQuestionRounds', max_question_rounds: 'maxQuestionRounds',
   passingscore: 'passingScore', passing_score: 'passingScore',
   followupthreshold: 'followUpThreshold', follow_up_threshold: 'followUpThreshold',
   followuprounds: 'followUpRounds', follow_up_rounds: 'followUpRounds',

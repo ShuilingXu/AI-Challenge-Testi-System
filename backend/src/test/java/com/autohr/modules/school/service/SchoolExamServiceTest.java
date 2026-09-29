@@ -263,6 +263,36 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void explicitMaximumRoundsOverrideLegacyFollowUpCountAndCannotBeBelowBaseRounds() {
+        jdbc.update("INSERT INTO recruitment_job(id,job_code,job_title,department_name,requirements,responsibilities,publish_date,status) "
+                        + "VALUES(?,?,?,?,?,?,?,1)", 81L, "EX-LIMIT", "Exam", "All students", "", "School exam", "2026-08-16");
+        jdbc.update("INSERT INTO school_exam(id,exam_code,exam_name,legacy_job_id,question_rounds,passing_score,status) "
+                        + "VALUES(?,?,?,?,?,?,?)", 81L, "EX-LIMIT", "Exam", 81L, 5, 60, "DRAFT");
+        RecruitmentJob job = new RecruitmentJob();
+        job.setId(81L);
+        when(jobMapper.selectSchoolJobById(81L)).thenReturn(job);
+        SchoolExamSaveRequest request = new SchoolExamSaveRequest();
+        request.setId(81L);
+        request.setExamCode("EX-LIMIT");
+        request.setExamName("Exam");
+        request.setQuestionRounds(3);
+        request.setMaxQuestionRounds(4);
+        request.setFollowUpRounds(20);
+
+        Map<String, Object> saved = service.saveExam(request);
+
+        assertEquals(3, saved.get("questionRounds"));
+        assertEquals(4, saved.get("maxQuestionRounds"));
+        assertEquals(1, saved.get("followUpRounds"));
+        request.setMaxQuestionRounds(2);
+        assertTrue(assertThrows(BusinessException.class, () -> service.saveExam(request))
+                .getMessage().contains("最多答题轮数"));
+        request.setMaxQuestionRounds(24);
+        assertTrue(assertThrows(BusinessException.class, () -> service.saveExam(request))
+                .getMessage().contains("最多答题轮数"));
+    }
+
+    @Test
     void registrationBindsAnIntervieweeAccountAndRejectsDifferentRosterDetails() {
         jdbc.update("INSERT INTO school_class(major_name,class_name,class_code,status) VALUES(?,?,?,1)",
                 "Computer Science", "Class 1", "CS-1");
@@ -439,6 +469,27 @@ class SchoolExamServiceTest {
         assertEquals(40, request.getValue().getAiFollowUpThreshold());
         assertEquals(1, request.getValue().getAiMinQuestionRounds());
         assertEquals(1, request.getValue().getAiMaxQuestionRounds());
+    }
+
+    @Test
+    void startsExamWithTheConfiguredTotalRoundLimit() {
+        seedStartableExam(60);
+        jdbc.update("UPDATE school_exam SET question_rounds=2,follow_up_rounds=2 WHERE id=31");
+        doAnswer(invocation -> {
+            RecruitmentCandidate candidate = invocation.getArgument(0);
+            candidate.setId(21L);
+            return 1;
+        }).when(candidateMapper).insertSchoolCandidate(any(RecruitmentCandidate.class));
+        InterviewVO started = new InterviewVO();
+        started.setId(41L);
+        when(interviewService.startInterviewProcess(any(StartInterviewProcessRequest.class))).thenReturn(started);
+
+        service.startExam(31L, 88L);
+
+        ArgumentCaptor<StartInterviewProcessRequest> request = ArgumentCaptor.forClass(StartInterviewProcessRequest.class);
+        verify(interviewService).startInterviewProcess(request.capture());
+        assertEquals(2, request.getValue().getAiMinQuestionRounds());
+        assertEquals(4, request.getValue().getAiMaxQuestionRounds());
     }
 
     private void seedStartableExam(int passingScore) {
