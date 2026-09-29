@@ -23,8 +23,13 @@ request.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearSession()
-      if (window.location.pathname !== '/login') {
+      if (!error.config?.url?.endsWith('/auth/me') && window.location.pathname !== '/login') {
         window.location.replace('/login')
+      }
+    }
+    if (error.response?.status === 403 && error.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      if (!['/change-password', '/changepasswd'].includes(window.location.pathname)) {
+        window.location.replace('/change-password')
       }
     }
     const message = error.response?.data?.message || error.message || '请求失败'

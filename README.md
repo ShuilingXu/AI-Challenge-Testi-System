@@ -130,3 +130,5 @@ npm run build
 ```
 
 The backend test suite includes school service and controller security coverage, including roster registration, Excel import validation, score/loss-rate analysis, low passing-score behavior, school LLM fallback, final-round completion, and per-round template knowledge-point persistence.
+
+For the single-score rubric, forced password-change recovery, and the reproducible 60-student HTTP load test, see [评分与并发验证](docs/scoring-and-load-test.md).

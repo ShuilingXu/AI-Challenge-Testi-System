@@ -23,7 +23,8 @@ import java.util.Set;
 public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
 
     private static final Set<String> ALLOWED_PATHS = Set.of(
-            "/api/auth/me", "/api/auth/change-password", "/api/auth/logout"
+            "/api/auth/me", "/api/auth/change-password", "/api/auth/logout",
+            "/api/auth/login", "/api/auth/captcha"
     );
 
     private final SysUserMapper sysUserMapper;
@@ -43,7 +44,7 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                 response.setContentType("application/json");
-                response.getWriter().write("{\"success\":false,\"message\":\"必须先修改初始密码\",\"data\":null}");
+                response.getWriter().write("{\"success\":false,\"code\":\"PASSWORD_CHANGE_REQUIRED\",\"message\":\"必须先修改初始密码\",\"data\":null}");
                 return;
             }
         }

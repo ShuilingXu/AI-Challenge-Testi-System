@@ -9,7 +9,9 @@ import KnowledgeTemplateView from '../views/KnowledgeTemplateView.vue'
 import StudentRegistrationView from '../views/StudentRegistrationView.vue'
 import StudentExamView from '../views/StudentExamView.vue'
 import ExamTakeView from '../views/ExamTakeView.vue'
-import { readSessionUser } from '../utils/session'
+import { readSessionUser, writeSessionUser } from '../utils/session'
+import { authApi } from '../services/api'
+import { sessionRedirect } from '../utils/sessionRedirect'
 
 const ADMIN_ROLES = ['IT_ADMIN', 'HR_ADMIN', 'HR_USER', 'SYSTEM_ADMIN', 'DEPARTMENT_HEAD', 'LECTURER']
 const KNOWN_ROLES = new Set([...ADMIN_ROLES, 'STUDENT'])
@@ -17,7 +19,7 @@ const routes = [
   { path: '/', redirect: '/student/register' },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/student/register', name: 'student-register', component: StudentRegistrationView },
-  { path: '/change-password', name: 'change-password', component: ForcePasswordChangeView, meta: { requiresAuth: true, allowOptionalPasswordChange: true } },
+  { path: '/change-password', alias: '/changepasswd', name: 'change-password', component: ForcePasswordChangeView, meta: { requiresAuth: true, allowOptionalPasswordChange: true } },
   { path: '/student', name: 'student-exams', component: StudentExamView, meta: { requiresAuth: true, roles: ['STUDENT'] } },
   { path: '/exam/take/:processId', name: 'exam-take', component: ExamTakeView, meta: { requiresAuth: true, roles: ['STUDENT'] } },
   { path: '/admin', redirect: '/admin/exams' },
@@ -32,11 +34,25 @@ const routes = [
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
-router.beforeEach((to) => {
-  if (!to.meta.requiresAuth) return true
+let sessionRestored = false
+router.beforeEach(async (to) => {
+  // Restore the HttpOnly cookie session even when localStorage was cleared.
+  if (!sessionRestored) {
+    try {
+      const response = await authApi.getSession()
+      writeSessionUser(response.data)
+      sessionRestored = true
+    } catch (error) {
+      if (error.status !== 401) throw error
+      sessionRestored = true
+    }
+  }
   const session = readSessionUser()
-  if (!session || !KNOWN_ROLES.has(session.roleCode)) return '/login'
-  if (Number(session.mustChangePassword) === 1 && to.name !== 'change-password') return '/change-password'
+  const validSession = session && KNOWN_ROLES.has(session.roleCode)
+  const redirect = validSession ? sessionRedirect(to, session) : null
+  if (redirect) return redirect
+  if (!to.meta.requiresAuth) return true
+  if (!validSession) return '/login'
   if (Number(session.mustChangePassword) !== 1 && to.name === 'change-password' && !to.meta.allowOptionalPasswordChange) return session.roleCode === 'STUDENT' ? '/student' : '/admin/exams'
   if (to.meta.roles && !to.meta.roles.includes(session.roleCode)) return session.roleCode === 'STUDENT' ? '/student' : '/admin/exams'
   return true
