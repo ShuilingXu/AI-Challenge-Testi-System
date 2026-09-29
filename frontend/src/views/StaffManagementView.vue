@@ -68,4 +68,7 @@ onMounted(load)
 
 <style scoped>
 .staff-page{min-height:100vh;background:var(--background)}.staff-layout{max-width:1280px;margin:0 auto;padding:30px;display:grid;grid-template-columns:320px minmax(0,1fr);gap:24px}.tool-panel,.list-panel{border:1px solid var(--border);background:var(--surface);padding:22px;border-radius:var(--radius-sm)}.tool-panel h1,.list-panel h2{margin:0 0 18px;font-size:20px}.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.panel-head p{margin:5px 0 0;color:var(--text-muted);font-size:13px}.panel-actions{display:flex;gap:8px;align-items:center}.actions{display:flex;gap:8px}@media(max-width:900px){.staff-layout{grid-template-columns:1fr;padding:18px}.panel-actions{flex-wrap:wrap}}
+.tool-panel,.list-panel,.panel-head>*,.staff-layout>*{min-width:0}
+.panel-head,.panel-actions,.actions{flex-wrap:wrap}
+@media(max-width:900px){.staff-layout{grid-template-columns:minmax(0,1fr)}}
 </style>

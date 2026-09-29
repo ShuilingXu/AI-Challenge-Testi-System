@@ -16,4 +16,8 @@ onMounted(load)
 </script>
 <style scoped>
 .site-page{min-height:100vh}.site-layout{max-width:1080px;margin:0 auto;padding:30px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px}.tool-panel,.preview{padding:24px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.tool-panel h1{margin:0 0 4px}.hint{color:var(--text-muted);font-size:13px;line-height:1.6}.actions{display:flex;gap:8px}.preview-brand{display:flex;align-items:center;gap:10px;font-size:18px}.preview>p:not(.page-eyebrow){color:var(--text-muted);line-height:1.6}.preview footer{display:grid;gap:5px;margin-top:70px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px;overflow-wrap:anywhere}.preview footer small{font-size:12px}.preview footer code{color:var(--primary);font:12px inherit}@media(max-width:800px){.site-layout{grid-template-columns:1fr;padding:18px}}
+.site-layout>*,.preview-brand>*{min-width:0}
+.preview-brand strong,.preview>p{overflow-wrap:anywhere}
+.actions{flex-wrap:wrap}
+@media(max-width:800px){.site-layout{grid-template-columns:minmax(0,1fr)}}
 </style>

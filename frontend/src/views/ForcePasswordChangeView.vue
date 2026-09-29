@@ -31,7 +31,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '../services/api'
 import { isStrongPassword, strongPasswordMessage } from '../utils/password'
-import { readSessionUser, writeSession } from '../utils/session'
+import { clearSession, readSessionUser, writeSession } from '../utils/session'
 
 const router = useRouter()
 const forced = computed(() => Number(readSessionUser()?.mustChangePassword) === 1)
@@ -64,6 +64,7 @@ async function logout() {
   try {
     await authApi.logout()
   } finally {
+    clearSession()
     router.replace('/login')
   }
 }

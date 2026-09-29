@@ -23,7 +23,7 @@ import { useRouter } from 'vue-router'
 import BrandMark from './BrandMark.vue'
 import { useSiteSettings } from '../composables/useSiteSettings'
 import { authApi } from '../services/api'
-import { readSessionUser } from '../utils/session'
+import { clearSession, readSessionUser } from '../utils/session'
 
 const router = useRouter()
 const { siteSettings } = useSiteSettings()
@@ -42,7 +42,7 @@ const visibleItems = computed(() => {
 })
 
 async function logout() {
-  try { await authApi.logout() } finally { router.push('/login') }
+  try { await authApi.logout() } finally { clearSession(); router.replace('/login') }
 }
 </script>
 
