@@ -10,7 +10,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("interview_knowledge_item")
+@TableName("school_knowledge_item")
 public class InterviewKnowledgeItem {
     @TableId(type = IdType.AUTO)
     private Long id;

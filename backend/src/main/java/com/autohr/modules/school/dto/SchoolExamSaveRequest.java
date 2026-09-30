@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class SchoolExamSaveRequest {
@@ -54,4 +55,9 @@ public class SchoolExamSaveRequest {
     private LocalDateTime publishStart;
     private LocalDateTime publishEnd;
     private String status;
+    private List<Long> responsibleTeacherIds;
+    private Boolean showLiveScore;
+    private Boolean showFinalScore;
+    private Boolean cameraEnabled;
+    private Boolean screenRecordingEnabled;
 }

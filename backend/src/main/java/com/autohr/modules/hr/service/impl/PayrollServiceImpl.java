@@ -98,7 +98,7 @@ public class PayrollServiceImpl implements PayrollService {
     public List<PayrollVO> generate(PayrollGenerateRequest request) {
         YearMonth target = parseMonth(request.getSalaryMonth());
         List<Map<String, Object>> employees = request.getEmployeeId() == null
-                ? jdbc.queryForList("SELECT e.*, j.default_overtime_rate FROM hr_employee e LEFT JOIN recruitment_job j ON e.job_id=j.id WHERE e.employment_status IN (1,3) AND e.salary_confirmed=1 ORDER BY e.id")
+                ? jdbc.queryForList("SELECT e.*, j.default_overtime_rate FROM hr_employee e LEFT JOIN school_assessment_config j ON e.job_id=j.id WHERE e.employment_status IN (1,3) AND e.salary_confirmed=1 ORDER BY e.id")
                 : List.of(ensureEmployee(request.getEmployeeId()));
         List<PayrollVO> result = new ArrayList<>();
         for (Map<String, Object> employee : employees) {
@@ -278,7 +278,7 @@ public class PayrollServiceImpl implements PayrollService {
             throw new BusinessException("Employee does not exist: " + employeeId);
         }
     }
-    private Map<String,Object> ensureEmployee(Long id) { List<Map<String,Object>> rows = jdbc.queryForList("SELECT e.*,j.default_overtime_rate FROM hr_employee e LEFT JOIN recruitment_job j ON e.job_id=j.id WHERE e.id=?", id); if (rows.isEmpty()) throw new BusinessException("Employee does not exist: " + id); return rows.get(0); }
+    private Map<String,Object> ensureEmployee(Long id) { List<Map<String,Object>> rows = jdbc.queryForList("SELECT e.*,j.default_overtime_rate FROM hr_employee e LEFT JOIN school_assessment_config j ON e.job_id=j.id WHERE e.id=?", id); if (rows.isEmpty()) throw new BusinessException("Employee does not exist: " + id); return rows.get(0); }
     private void upsertMonthlyInput(String table, String insertColumns, String updateColumns, Object... values) {
         String[] columns = insertColumns.split(",");
         String[] updates = updateColumns.split(",");

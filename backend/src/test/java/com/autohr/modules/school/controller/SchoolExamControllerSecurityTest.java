@@ -7,6 +7,7 @@ import com.autohr.modules.auth.config.PasswordChangeRequiredFilter;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.service.AuthService;
 import com.autohr.modules.school.service.SchoolExamService;
+import com.autohr.modules.school.service.SchoolExamRecordingService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
@@ -44,6 +45,9 @@ class SchoolExamControllerSecurityTest {
 
     @MockBean
     SchoolExamService schoolExamService;
+
+    @MockBean
+    SchoolExamRecordingService schoolExamRecordingService;
 
     @MockBean
     AuthService authService;

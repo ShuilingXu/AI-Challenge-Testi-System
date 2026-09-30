@@ -100,11 +100,11 @@ class ExamConcurrencyTest {
     @Test
     void sixtyStudentsCompleteTwoRoundsWithoutLostOrDuplicateScores() throws Exception {
         jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code) VALUES(900,'测试','并发班','LOAD60')");
-        jdbc.update("INSERT INTO interview_knowledge_base(id,knowledge_base_name) VALUES(900,'事务')");
+        jdbc.update("INSERT INTO school_knowledge_base(id,knowledge_base_name) VALUES(900,'事务')");
         for (int i = 0; i < 101; i++) {
-            jdbc.update("INSERT INTO interview_knowledge_item(knowledge_base_id,knowledge_point,knowledge_content) VALUES(900,?,?)", "其他主题" + i, "无关材料" + i);
+            jdbc.update("INSERT INTO school_knowledge_item(knowledge_base_id,knowledge_point,knowledge_content) VALUES(900,?,?)", "其他主题" + i, "无关材料" + i);
         }
-        jdbc.update("INSERT INTO interview_knowledge_item(knowledge_base_id,knowledge_point,knowledge_content) VALUES(900,'事务','原子性要求事务全部完成或全部回滚。')");
+        jdbc.update("INSERT INTO school_knowledge_item(knowledge_base_id,knowledge_point,knowledge_content) VALUES(900,'事务','原子性要求事务全部完成或全部回滚。')");
         for (int i = 0; i < 60; i++) {
             if (PREBOUND_ACCOUNTS) {
                 jdbc.update("INSERT INTO sys_user(id,username,password,role_code,display_name,status,must_change_password,token_version) VALUES(?,?,?,'STUDENT',?,1,0,0)",
@@ -160,10 +160,10 @@ class ExamConcurrencyTest {
         assertEquals(120, questions.get());
         assertEquals(60, summaries.get());
         assertEquals(0, invalidContexts.get(), "retrieve relevant knowledge even beyond the first 100 rows");
-        assertEquals(120, jdbc.queryForObject("SELECT COUNT(*) FROM interview_ai_record WHERE answer_status='COMPLETED' AND average_score=85", Integer.class));
-        // The current application reads final status/score from interview_process;
+        assertEquals(120, jdbc.queryForObject("SELECT COUNT(*) FROM school_answer_record WHERE answer_status='COMPLETED' AND average_score=85", Integer.class));
+        // The current application reads final status/score from school_exam_process;
         // school_exam_attempt's legacy summary columns are not populated on submission.
-        assertEquals(60, jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_attempt a JOIN interview_process p ON p.id=a.process_id WHERE p.overall_status='COMPLETED' AND p.ai_average_score=85", Integer.class));
+        assertEquals(60, jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_attempt a JOIN school_exam_process p ON p.id=a.process_id WHERE p.overall_status='COMPLETED' AND p.ai_average_score=85", Integer.class));
         assertEquals(60, jdbc.queryForObject("SELECT COUNT(DISTINCT student_id) FROM school_exam_attempt", Integer.class));
         StringBuilder report = new StringBuilder("students=60 rounds=2 preboundAccounts=" + PREBOUND_ACCOUNTS + " mockLlmDelayMs=" + DELAY_MS + " elapsedMs=" + (System.nanoTime() - begun) / 1_000_000 + "\n");
         timings.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {

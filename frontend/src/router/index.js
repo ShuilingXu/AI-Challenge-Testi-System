@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import ForcePasswordChangeView from '../views/ForcePasswordChangeView.vue'
 import SchoolAdminView from '../views/SchoolAdminView.vue'
+import ScoreReviewView from '../views/ScoreReviewView.vue'
 import SystemConfigView from '../views/SystemConfigView.vue'
 import StaffManagementView from '../views/StaffManagementView.vue'
 import SiteSettingsView from '../views/SiteSettingsView.vue'
@@ -27,10 +28,12 @@ const routes = [
   { path: '/admin/classes', name: 'admin-classes', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'classes' } },
   { path: '/admin/students', name: 'admin-students', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'students' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: SchoolAdminView, meta: { requiresAuth: true, roles: ADMIN_ROLES, schoolMode: 'analytics' } },
+  { path: '/admin/score-review', name: 'admin-score-review', component: ScoreReviewView, meta: { requiresAuth: true, roles: ADMIN_ROLES } },
+  { path: '/admin/score-review/:processId', name: 'admin-score-review-detail', component: ScoreReviewView, meta: { requiresAuth: true, roles: ADMIN_ROLES } },
   { path: '/admin/knowledge', name: 'admin-knowledge', component: KnowledgeTemplateView, meta: { requiresAuth: true, roles: ADMIN_ROLES } },
   { path: '/admin/settings', name: 'admin-settings', component: SystemConfigView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN'] } },
   { path: '/admin/site-settings', name: 'admin-site-settings', component: SiteSettingsView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN'] } },
-  { path: '/admin/staff', name: 'admin-staff', component: StaffManagementView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN', 'DEPARTMENT_HEAD'] } },
+  { path: '/admin/staff', name: 'admin-staff', component: StaffManagementView, meta: { requiresAuth: true, roles: ['IT_ADMIN', 'SYSTEM_ADMIN', 'DEPARTMENT_HEAD', 'HR_ADMIN'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

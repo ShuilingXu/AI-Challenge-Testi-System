@@ -203,19 +203,19 @@ public class HrStatisticsServiceImpl implements HrStatisticsService {
                                      Map<Long, List<Map<String, Object>>> historiesByEmployee) {
         LocalDate closeDateCutoff = month.equals(YearMonth.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : month.atEndOfMonth();
         result.getRecruitment().setOpenJobCount(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM recruitment_job WHERE status=1 AND (close_date IS NULL OR close_date>=?)",
+                "SELECT COUNT(*) FROM school_assessment_config WHERE status=1 AND (close_date IS NULL OR close_date>=?)",
                 Long.class, closeDateCutoff));
         result.getRecruitment().setCandidateCount(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM recruitment_candidate WHERE created_at>=? AND created_at<?",
+                "SELECT COUNT(*) FROM school_exam_candidate WHERE created_at>=? AND created_at<?",
                 Long.class, month.atDay(1).atStartOfDay(), month.plusMonths(1).atDay(1).atStartOfDay()));
         result.getRecruitment().setInterviewingCount(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM interview_process WHERE overall_status='IN_PROGRESS' AND created_at>=? AND created_at<?",
+                "SELECT COUNT(*) FROM school_exam_process WHERE overall_status='IN_PROGRESS' AND created_at>=? AND created_at<?",
                 Long.class, month.atDay(1).atStartOfDay(), month.plusMonths(1).atDay(1).atStartOfDay()));
         result.getRecruitment().setPassedCount(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM interview_process WHERE overall_status='PASSED' AND created_at>=? AND created_at<?",
+                "SELECT COUNT(*) FROM school_exam_process WHERE overall_status='PASSED' AND created_at>=? AND created_at<?",
                 Long.class, month.atDay(1).atStartOfDay(), month.plusMonths(1).atDay(1).atStartOfDay()));
 
-        List<Map<String, Object>> jobs = jdbc.queryForList("SELECT id,job_code,job_title FROM recruitment_job ORDER BY id");
+        List<Map<String, Object>> jobs = jdbc.queryForList("SELECT id,job_code,job_title FROM school_assessment_config ORDER BY id");
         for (Map<String, Object> job : jobs) {
             Long jobId = number(job.get("id"));
             BigDecimal total = ZERO;

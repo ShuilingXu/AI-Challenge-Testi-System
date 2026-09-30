@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS recruitment_job (
+CREATE TABLE IF NOT EXISTS school_assessment_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_code VARCHAR(64) NOT NULL UNIQUE,
     job_title VARCHAR(128) NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS recruitment_job (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS recruitment_candidate (
+CREATE TABLE IF NOT EXISTS school_exam_candidate (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL,
     full_name VARCHAR(64) NOT NULL,
@@ -23,15 +23,15 @@ CREATE TABLE IF NOT EXISTS recruitment_candidate (
     interview_process_id INTEGER,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (job_id) REFERENCES recruitment_job(id)
+    FOREIGN KEY (job_id) REFERENCES school_assessment_config(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_recruitment_job_status ON recruitment_job(status);
-CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_job_id ON recruitment_candidate(job_id);
-CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_status ON recruitment_candidate(application_status);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_recruitment_candidate_job_interviewee ON recruitment_candidate(job_id, interviewee_user_id);
+CREATE INDEX IF NOT EXISTS idx_recruitment_job_status ON school_assessment_config(status);
+CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_job_id ON school_exam_candidate(job_id);
+CREATE INDEX IF NOT EXISTS idx_recruitment_candidate_status ON school_exam_candidate(application_status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recruitment_candidate_job_interviewee ON school_exam_candidate(job_id, interviewee_user_id);
 
-CREATE TABLE IF NOT EXISTS interview_batch (
+CREATE TABLE IF NOT EXISTS school_exam_batch (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_code VARCHAR(64) NOT NULL UNIQUE,
     batch_name VARCHAR(128) NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS interview_batch (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_question (
+CREATE TABLE IF NOT EXISTS school_question (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question_title VARCHAR(128) NOT NULL,
     question_type VARCHAR(32) NOT NULL DEFAULT 'TEXT',
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS interview_question (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_candidate (
+CREATE TABLE IF NOT EXISTS school_question_candidate (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_id INTEGER NOT NULL,
     recruitment_candidate_id INTEGER NOT NULL,
@@ -69,10 +69,10 @@ CREATE TABLE IF NOT EXISTS interview_candidate (
     interviewer_comment VARCHAR(1000),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (batch_id) REFERENCES interview_batch(id)
+    FOREIGN KEY (batch_id) REFERENCES school_exam_batch(id)
 );
 
-CREATE TABLE IF NOT EXISTS interview_submission (
+CREATE TABLE IF NOT EXISTS school_question_submission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     interview_candidate_id INTEGER NOT NULL,
     question_id INTEGER NOT NULL,
@@ -81,16 +81,16 @@ CREATE TABLE IF NOT EXISTS interview_submission (
     reviewer_comment VARCHAR(1000),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (interview_candidate_id) REFERENCES interview_candidate(id),
-    FOREIGN KEY (question_id) REFERENCES interview_question(id)
+    FOREIGN KEY (interview_candidate_id) REFERENCES school_question_candidate(id),
+    FOREIGN KEY (question_id) REFERENCES school_question(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_interview_batch_status ON interview_batch(status);
-CREATE INDEX IF NOT EXISTS idx_interview_question_status ON interview_question(status);
-CREATE INDEX IF NOT EXISTS idx_interview_candidate_batch_id ON interview_candidate(batch_id);
-CREATE INDEX IF NOT EXISTS idx_interview_submission_candidate_id ON interview_submission(interview_candidate_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_candidate_batch_recruitment ON interview_candidate(batch_id, recruitment_candidate_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_submission_candidate_question ON interview_submission(interview_candidate_id, question_id);
+CREATE INDEX IF NOT EXISTS idx_interview_batch_status ON school_exam_batch(status);
+CREATE INDEX IF NOT EXISTS idx_interview_question_status ON school_question(status);
+CREATE INDEX IF NOT EXISTS idx_interview_candidate_batch_id ON school_question_candidate(batch_id);
+CREATE INDEX IF NOT EXISTS idx_interview_submission_candidate_id ON school_question_submission(interview_candidate_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_candidate_batch_recruitment ON school_question_candidate(batch_id, recruitment_candidate_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_submission_candidate_question ON school_question_submission(interview_candidate_id, question_id);
 
 CREATE TABLE IF NOT EXISTS sys_user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,7 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_sys_audit_log_module_code ON sys_audit_log(module
 CREATE INDEX IF NOT EXISTS idx_sys_audit_log_operator_user_id ON sys_audit_log(operator_user_id);
 CREATE INDEX IF NOT EXISTS idx_sys_audit_log_created_at ON sys_audit_log(created_at);
 
-CREATE TABLE IF NOT EXISTS interview_knowledge_base (
+CREATE TABLE IF NOT EXISTS school_knowledge_base (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     knowledge_base_name VARCHAR(128) NOT NULL,
     tech_category VARCHAR(128),
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS interview_knowledge_base (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_knowledge_item (
+CREATE TABLE IF NOT EXISTS school_knowledge_item (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     knowledge_base_id INTEGER NOT NULL,
     knowledge_point VARCHAR(255) NOT NULL,
@@ -149,10 +149,10 @@ CREATE TABLE IF NOT EXISTS interview_knowledge_item (
     status INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (knowledge_base_id) REFERENCES interview_knowledge_base(id)
+    FOREIGN KEY (knowledge_base_id) REFERENCES school_knowledge_base(id)
 );
 
-CREATE TABLE IF NOT EXISTS interview_job_knowledge_weight (
+CREATE TABLE IF NOT EXISTS school_exam_knowledge_weight (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL,
     knowledge_base_id INTEGER NOT NULL,
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS interview_job_knowledge_weight (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_llm_config (
+CREATE TABLE IF NOT EXISTS school_llm_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     config_name VARCHAR(128) NOT NULL,
     model_role VARCHAR(32) NOT NULL,
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS interview_llm_config (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_process (
+CREATE TABLE IF NOT EXISTS school_exam_process (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     recruitment_candidate_id INTEGER NOT NULL,
     interviewee_user_id INTEGER,
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS interview_process (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_ai_record (
+CREATE TABLE IF NOT EXISTS school_answer_record (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     process_id INTEGER NOT NULL,
     process_stage_id INTEGER,
@@ -233,12 +233,13 @@ CREATE TABLE IF NOT EXISTS interview_ai_record (
     scorer_score INTEGER,
     average_score INTEGER,
     interviewer_comment VARCHAR(2000),
+    teacher_note VARCHAR(2000),
     sequence_no INTEGER NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_video_session (
+CREATE TABLE IF NOT EXISTS school_video_session (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     process_id INTEGER NOT NULL,
     process_stage_id INTEGER,
@@ -278,9 +279,9 @@ CREATE TABLE IF NOT EXISTS interview_video_session (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_job_knowledge_weight_job_base
-    ON interview_job_knowledge_weight(job_id, knowledge_base_id);
+    ON school_exam_knowledge_weight(job_id, knowledge_base_id);
 
-CREATE TABLE IF NOT EXISTS interview_process_template (
+CREATE TABLE IF NOT EXISTS school_exam_template (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     template_name VARCHAR(128) NOT NULL,
     description VARCHAR(1000),
@@ -290,7 +291,7 @@ CREATE TABLE IF NOT EXISTS interview_process_template (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_process_template_stage (
+CREATE TABLE IF NOT EXISTS school_exam_template_stage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     template_id INTEGER NOT NULL,
     stage_name VARCHAR(128) NOT NULL,
@@ -302,7 +303,7 @@ CREATE TABLE IF NOT EXISTS interview_process_template_stage (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_process_stage (
+CREATE TABLE IF NOT EXISTS school_exam_process_stage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     process_id INTEGER NOT NULL,
     template_stage_id INTEGER,
@@ -321,19 +322,19 @@ CREATE TABLE IF NOT EXISTS interview_process_stage (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_process_candidate_id ON interview_process(recruitment_candidate_id);
-CREATE INDEX IF NOT EXISTS idx_interview_process_template_id ON interview_process(template_id);
-CREATE INDEX IF NOT EXISTS idx_interview_process_stage ON interview_process(current_stage);
-CREATE INDEX IF NOT EXISTS idx_interview_ai_record_process_id ON interview_ai_record(process_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_ai_record_scope_sequence ON interview_ai_record(process_id, stage_scope_id, sequence_no);
-CREATE INDEX IF NOT EXISTS idx_interview_ai_record_question_retry ON interview_ai_record(question_status, question_next_retry_at);
-CREATE INDEX IF NOT EXISTS idx_interview_ai_record_answer_lease ON interview_ai_record(answer_status, answer_lease_expires_at);
-CREATE INDEX IF NOT EXISTS idx_interview_ai_record_process_stage_id ON interview_ai_record(process_stage_id);
-CREATE INDEX IF NOT EXISTS idx_interview_video_session_process_id ON interview_video_session(process_id);
-CREATE INDEX IF NOT EXISTS idx_interview_video_session_process_stage_id ON interview_video_session(process_stage_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_video_session_process_scope ON interview_video_session(process_id, stage_scope_id);
-CREATE INDEX IF NOT EXISTS idx_interview_process_template_stage_template_id ON interview_process_template_stage(template_id);
-CREATE INDEX IF NOT EXISTS idx_interview_process_stage_process_id ON interview_process_stage(process_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_process_candidate_id ON school_exam_process(recruitment_candidate_id);
+CREATE INDEX IF NOT EXISTS idx_interview_process_template_id ON school_exam_process(template_id);
+CREATE INDEX IF NOT EXISTS idx_interview_process_stage ON school_exam_process(current_stage);
+CREATE INDEX IF NOT EXISTS idx_interview_ai_record_process_id ON school_answer_record(process_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_ai_record_scope_sequence ON school_answer_record(process_id, stage_scope_id, sequence_no);
+CREATE INDEX IF NOT EXISTS idx_interview_ai_record_question_retry ON school_answer_record(question_status, question_next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_interview_ai_record_answer_lease ON school_answer_record(answer_status, answer_lease_expires_at);
+CREATE INDEX IF NOT EXISTS idx_interview_ai_record_process_stage_id ON school_answer_record(process_stage_id);
+CREATE INDEX IF NOT EXISTS idx_interview_video_session_process_id ON school_video_session(process_id);
+CREATE INDEX IF NOT EXISTS idx_interview_video_session_process_stage_id ON school_video_session(process_stage_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_video_session_process_scope ON school_video_session(process_id, stage_scope_id);
+CREATE INDEX IF NOT EXISTS idx_interview_process_template_stage_template_id ON school_exam_template_stage(template_id);
+CREATE INDEX IF NOT EXISTS idx_interview_process_stage_process_id ON school_exam_process_stage(process_id);
 
 -- School examination extension. The legacy recruitment/interview tables remain available for
 -- historical data, while these tables own the school-facing class, student, exam and analysis model.
@@ -371,20 +372,25 @@ CREATE TABLE IF NOT EXISTS school_exam (
     legacy_job_id INTEGER NOT NULL UNIQUE,
     instructions VARCHAR(2000),
     question_rounds INTEGER NOT NULL DEFAULT 5,
+    max_question_rounds INTEGER,
     passing_score INTEGER NOT NULL DEFAULT 60,
     follow_up_threshold INTEGER,
     follow_up_rounds INTEGER NOT NULL DEFAULT 0,
     anti_cheat_switch_limit INTEGER NOT NULL DEFAULT 5,
     anti_cheat_action VARCHAR(16) NOT NULL DEFAULT 'SUBMIT',
+    show_live_score INTEGER NOT NULL DEFAULT 1,
+    show_final_score INTEGER NOT NULL DEFAULT 1,
+    camera_enabled INTEGER NOT NULL DEFAULT 0,
+    screen_recording_enabled INTEGER NOT NULL DEFAULT 0,
     publish_start DATETIME,
     publish_end DATETIME,
     status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (class_id) REFERENCES school_class(id),
-    FOREIGN KEY (knowledge_base_id) REFERENCES interview_knowledge_base(id),
-    FOREIGN KEY (process_template_id) REFERENCES interview_process_template(id),
-    FOREIGN KEY (legacy_job_id) REFERENCES recruitment_job(id)
+    FOREIGN KEY (knowledge_base_id) REFERENCES school_knowledge_base(id),
+    FOREIGN KEY (process_template_id) REFERENCES school_exam_template(id),
+    FOREIGN KEY (legacy_job_id) REFERENCES school_assessment_config(id)
 );
 
 CREATE TABLE IF NOT EXISTS school_exam_attempt (
@@ -392,6 +398,8 @@ CREATE TABLE IF NOT EXISTS school_exam_attempt (
     exam_id INTEGER NOT NULL,
     student_id INTEGER NOT NULL,
     process_id INTEGER NOT NULL UNIQUE,
+    camera_enabled INTEGER NOT NULL DEFAULT 0,
+    screen_recording_enabled INTEGER NOT NULL DEFAULT 0,
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     submitted_at DATETIME,
     score_rate INTEGER,
@@ -402,7 +410,35 @@ CREATE TABLE IF NOT EXISTS school_exam_attempt (
     UNIQUE (exam_id, student_id),
     FOREIGN KEY (exam_id) REFERENCES school_exam(id),
     FOREIGN KEY (student_id) REFERENCES school_student(id),
-    FOREIGN KEY (process_id) REFERENCES interview_process(id)
+    FOREIGN KEY (process_id) REFERENCES school_exam_process(id)
+);
+
+CREATE TABLE IF NOT EXISTS school_exam_teacher (
+    exam_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY (exam_id, user_id),
+    FOREIGN KEY (exam_id) REFERENCES school_exam(id),
+    FOREIGN KEY (user_id) REFERENCES sys_user(id)
+);
+
+CREATE TABLE IF NOT EXISTS school_exam_recording (
+    process_id INTEGER NOT NULL,
+    segment_no INTEGER NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (process_id, segment_no),
+    FOREIGN KEY (process_id) REFERENCES school_exam_process(id)
+);
+
+CREATE TABLE IF NOT EXISTS school_score_review (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id INTEGER NOT NULL,
+    process_id INTEGER NOT NULL,
+    old_score INTEGER NOT NULL,
+    new_score INTEGER NOT NULL,
+    teacher_note VARCHAR(2000),
+    operator_user_id INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_school_class_major_name ON school_class(major_name);

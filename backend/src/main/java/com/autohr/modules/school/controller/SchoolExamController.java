@@ -9,6 +9,8 @@ import com.autohr.modules.school.dto.SchoolExamSaveRequest;
 import com.autohr.modules.school.dto.SchoolStudentSaveRequest;
 import com.autohr.modules.school.dto.StudentRegistrationRequest;
 import com.autohr.modules.school.service.SchoolExamService;
+import com.autohr.modules.school.service.SchoolExamRecordingService;
+import com.autohr.modules.school.dto.ScoreReviewRequest;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,7 @@ import java.util.Map;
 public class SchoolExamController {
 
     private final SchoolExamService schoolExamService;
+    private final SchoolExamRecordingService schoolExamRecordingService;
     private final AuthService authService;
     private final AuthCookieService authCookieService;
 
@@ -107,40 +111,58 @@ public class SchoolExamController {
     }
 
     @GetMapping("/admin/exams")
-    public ApiResponse<List<Map<String, Object>>> listExams() {
-        return ApiResponse.success(schoolExamService.listAdminExams());
+    public ApiResponse<List<Map<String, Object>>> listExams(Authentication authentication) {
+        return ApiResponse.success(schoolExamService.listAdminExams(current(authentication)));
+    }
+
+    @GetMapping("/admin/teachers")
+    public ApiResponse<List<Map<String, Object>>> teachers(Authentication authentication) {
+        return ApiResponse.success(schoolExamService.listAssignableTeachers(current(authentication)));
     }
 
     @PostMapping("/admin/exams")
-    public ApiResponse<Map<String, Object>> saveExam(@Valid @RequestBody SchoolExamSaveRequest request) {
-        return ApiResponse.success(schoolExamService.saveExam(request));
+    public ApiResponse<Map<String, Object>> saveExam(Authentication authentication, @Valid @RequestBody SchoolExamSaveRequest request) {
+        return ApiResponse.success(schoolExamService.saveExam(request, current(authentication)));
     }
 
     @PostMapping("/admin/exams/{examId}/delete")
-    public ApiResponse<Void> deleteExam(@PathVariable Long examId) {
-        schoolExamService.deleteExam(examId);
+    public ApiResponse<Void> deleteExam(Authentication authentication, @PathVariable Long examId) {
+        schoolExamService.deleteExam(examId, current(authentication));
         return ApiResponse.success("deleted", null);
     }
 
     @GetMapping("/admin/analytics")
-    public ApiResponse<Map<String, Object>> analytics(@RequestParam(required = false) Long examId,
+    public ApiResponse<Map<String, Object>> analytics(Authentication authentication, @RequestParam(required = false) Long examId,
                                                         @RequestParam(required = false) Long classId) {
-        return ApiResponse.success(schoolExamService.analytics(examId, classId));
+        return ApiResponse.success(schoolExamService.analytics(examId, classId, current(authentication)));
+    }
+
+    @GetMapping("/admin/scores")
+    public ApiResponse<List<Map<String, Object>>> scores(Authentication authentication,
+            @RequestParam(required = false) Long examId, @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) String name, @RequestParam(required = false) String studentNo) {
+        return ApiResponse.success(schoolExamService.searchScores(examId, classId, name, studentNo, current(authentication)));
+    }
+
+    @PostMapping("/admin/records/{recordId}/review")
+    public ApiResponse<Map<String, Object>> reviewScore(Authentication authentication, @PathVariable Long recordId,
+            @Valid @RequestBody ScoreReviewRequest request) {
+        return ApiResponse.success(schoolExamService.reviewScore(recordId, request, current(authentication)));
     }
 
     @GetMapping("/admin/attempts/{processId}")
-    public ApiResponse<Map<String, Object>> adminAttemptDetails(@PathVariable Long processId) {
-        return ApiResponse.success(schoolExamService.adminAttemptDetails(processId));
+    public ApiResponse<Map<String, Object>> adminAttemptDetails(Authentication authentication, @PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.adminAttemptDetails(processId, current(authentication)));
     }
 
     @PostMapping("/admin/attempts/{processId}/restart")
-    public ApiResponse<Map<String, Object>> restartAttempt(@PathVariable Long processId) {
-        return ApiResponse.success(schoolExamService.resetAttempt(processId, true));
+    public ApiResponse<Map<String, Object>> restartAttempt(Authentication authentication, @PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.resetAttempt(processId, true, current(authentication)));
     }
 
     @PostMapping("/admin/attempts/{processId}/continue")
-    public ApiResponse<Map<String, Object>> continueAttempt(@PathVariable Long processId) {
-        return ApiResponse.success(schoolExamService.resetAttempt(processId, false));
+    public ApiResponse<Map<String, Object>> continueAttempt(Authentication authentication, @PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.resetAttempt(processId, false, current(authentication)));
     }
 
     @GetMapping("/student/exams")
@@ -161,6 +183,35 @@ public class SchoolExamController {
     @GetMapping("/student/attempts/{processId}/analysis")
     public ApiResponse<Map<String, Object>> attemptAnalysis(Authentication authentication, @PathVariable Long processId) {
         return ApiResponse.success(schoolExamService.studentAttemptAnalysis(processId, current(authentication).getId()));
+    }
+
+    @GetMapping("/student/attempts/{processId}/monitoring-policy")
+    public ApiResponse<Map<String, Object>> monitoringPolicy(Authentication authentication, @PathVariable Long processId) {
+        return ApiResponse.success(schoolExamService.studentMonitoringPolicy(processId, current(authentication).getId()));
+    }
+
+    @PostMapping("/student/attempts/{processId}/recordings/{segmentNo}")
+    public ApiResponse<Void> uploadRecording(Authentication authentication, @PathVariable Long processId,
+            @PathVariable int segmentNo, @RequestParam("file") MultipartFile file) {
+        schoolExamRecordingService.upload(processId, segmentNo, current(authentication).getId(), file);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/admin/attempts/{processId}/recordings")
+    public ApiResponse<List<Map<String, Object>>> recordings(Authentication authentication, @PathVariable Long processId) {
+        return ApiResponse.success(schoolExamRecordingService.list(processId, current(authentication)));
+    }
+
+    @GetMapping("/admin/attempts/{processId}/recordings/{segmentNo}")
+    public ResponseEntity<Resource> openRecording(Authentication authentication, @PathVariable Long processId, @PathVariable int segmentNo) {
+        return schoolExamRecordingService.open(processId, segmentNo, current(authentication));
+    }
+
+    @GetMapping("/admin/attempts/{processId}/recordings/{segmentNo}/download-url")
+    public ApiResponse<Map<String, String>> recordingDownloadUrl(Authentication authentication,
+            @PathVariable Long processId, @PathVariable int segmentNo) {
+        schoolExamRecordingService.open(processId, segmentNo, current(authentication));
+        return ApiResponse.success(Map.of());
     }
 
     private SessionUserVO current(Authentication authentication) {

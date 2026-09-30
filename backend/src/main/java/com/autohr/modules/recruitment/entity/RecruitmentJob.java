@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.math.BigDecimal;
 
 @Data
-@TableName("recruitment_job")
+@TableName("school_assessment_config")
 public class RecruitmentJob {
 
     @TableId(type = IdType.AUTO)

@@ -18,22 +18,36 @@ except ImportError as error:
 
 
 TABLES = [
-    # Parent rows must be copied before a source-candidate employee reference.
-    # PostgreSQL's production FK is intentionally non-deferrable and therefore
-    # cannot be postponed with SET CONSTRAINTS ALL DEFERRED.
-    "sys_user", "hr_department", "recruitment_job", "recruitment_candidate",
-    "hr_employee", "hr_integration_binding", "recruitment_resume_file",
-    "hr_salary_history", "hr_performance_month", "hr_overtime_month",
-    "hr_social_insurance_month", "hr_special_deduction_month", "hr_payroll_month",
-    "user_dashboard_config",
-    "interview_batch", "interview_question", "interview_candidate", "interview_submission",
-    "sys_audit_log", "interview_knowledge_base", "interview_knowledge_item",
-    "interview_job_knowledge_weight", "interview_llm_config", "interview_process_template",
-    "interview_process_template_stage", "interview_process", "interview_process_stage",
-    "interview_ai_record", "interview_video_session",
+    "sys_user", "sys_audit_log", "school_class", "school_student",
+    "school_assessment_config", "school_exam_candidate", "school_exam_batch",
+    "school_question", "school_question_candidate", "school_question_submission",
+    "school_knowledge_base", "school_knowledge_item", "school_exam_knowledge_weight",
+    "school_llm_config", "school_exam_template", "school_exam_template_stage",
+    "school_exam_process", "school_exam_process_stage", "school_answer_record",
+    "school_video_session", "school_exam", "school_exam_attempt",
+    "school_exam_teacher", "school_score_review",
 ]
 
-EXPECTED_TABLE_COUNT = 29
+LEGACY_TABLE_NAMES = {
+    "school_assessment_config": "recruitment_job",
+    "school_exam_candidate": "recruitment_candidate",
+    "school_exam_batch": "interview_batch",
+    "school_question": "interview_question",
+    "school_question_candidate": "interview_candidate",
+    "school_question_submission": "interview_submission",
+    "school_knowledge_base": "interview_knowledge_base",
+    "school_knowledge_item": "interview_knowledge_item",
+    "school_exam_knowledge_weight": "interview_job_knowledge_weight",
+    "school_llm_config": "interview_llm_config",
+    "school_exam_template": "interview_process_template",
+    "school_exam_template_stage": "interview_process_template_stage",
+    "school_exam_process": "interview_process",
+    "school_exam_process_stage": "interview_process_stage",
+    "school_answer_record": "interview_ai_record",
+    "school_video_session": "interview_video_session",
+}
+
+EXPECTED_TABLE_COUNT = 24
 if len(TABLES) != EXPECTED_TABLE_COUNT:
     raise RuntimeError(f"Migration table list must contain {EXPECTED_TABLE_COUNT} tables, got {len(TABLES)}")
 
@@ -70,10 +84,7 @@ TYPE_COLUMNS = {
 # These nullable relationships can point to rows that have not been inserted yet,
 # including rows in the same table. Insert them as NULL and restore them after all
 # parent rows exist because production PostgreSQL constraints are non-deferrable.
-DEFERRED_REFERENCE_COLUMNS = {
-    "hr_department": ("parent_department_id", "manager_employee_id"),
-    "hr_employee": ("manager_employee_id",),
-}
+DEFERRED_REFERENCE_COLUMNS = {}
 
 DEFAULT_BACKUP_DIR = Path(__file__).resolve().parent.parent / "backups" / "postgres-migration"
 # Coordinate one-time migrations with the application's startup migration runner.
@@ -84,6 +95,31 @@ MIGRATION_LOCK_ID = 4_154_857_282_026
 
 def quote(identifier):
     return '"' + identifier.replace('"', '""') + '"'
+
+
+def source_table_exists(source, table):
+    return source.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone() is not None
+
+
+def source_table_name(source, normalized_name):
+    legacy_name = LEGACY_TABLE_NAMES.get(normalized_name)
+    has_new = source_table_exists(source, normalized_name)
+    has_old = bool(legacy_name and source_table_exists(source, legacy_name))
+    if has_new and has_old:
+        raise SystemExit(f"Both table names exist in SQLite: {legacy_name}, {normalized_name}")
+    return normalized_name if has_new else legacy_name if has_old else None
+
+
+def require_no_unmapped_data(source):
+    known = set(TABLES) | set(LEGACY_TABLE_NAMES.values())
+    names = [row[0] for row in source.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    )]
+    for name in names:
+        if name not in known and source.execute(f"SELECT 1 FROM {quote(name)} LIMIT 1").fetchone():
+            raise SystemExit(f"SQLite table {name} has data but no PostgreSQL destination; migration stopped to prevent data loss")
 
 
 def target_table_exists(cursor, table):
@@ -199,6 +235,7 @@ def migrate(sqlite_path, postgres_dsn, force_overwrite=False, dry_run=False,
     source.row_factory = sqlite3.Row
     try:
         source.execute("BEGIN")
+        require_no_unmapped_data(source)
         with psycopg.connect(postgres_dsn) as target:
             try:
                 with target.cursor() as cursor:
@@ -217,7 +254,8 @@ def migrate(sqlite_path, postgres_dsn, force_overwrite=False, dry_run=False,
                     migrated_tables = set()
                     source_row_counts = {}
                     for table in TABLES:
-                        columns = [row[1] for row in source.execute(f"PRAGMA table_info({quote(table)})")]
+                        source_name = source_table_name(source, table)
+                        columns = [row[1] for row in source.execute(f"PRAGMA table_info({quote(source_name)})")] if source_name else []
                         if not columns:
                             print(f"{table}: skipped (not present in SQLite source)")
                             continue
@@ -228,7 +266,7 @@ def migrate(sqlite_path, postgres_dsn, force_overwrite=False, dry_run=False,
                         missing_columns = [column for column in columns if column not in target_types]
                         if missing_columns:
                             raise SystemExit(f"Target PostgreSQL table {table} is missing columns: {', '.join(missing_columns)}")
-                        rows = source.execute(f"SELECT * FROM {quote(table)}").fetchall()
+                        rows = source.execute(f"SELECT * FROM {quote(source_name)}").fetchall()
                         source_row_counts[table] = len(rows)
                         print(f"{table}: {len(rows)} rows")
                         if dry_run:

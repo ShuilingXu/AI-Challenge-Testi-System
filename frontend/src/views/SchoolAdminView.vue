@@ -48,17 +48,20 @@
           <el-form-item label="考试名称"><el-input v-model="examForm.examName" /></el-form-item>
           <el-form-item label="考试代码"><el-input v-model="examForm.examCode" placeholder="例如：JAVA-2026-01" /></el-form-item>
           <el-form-item label="面向班级"><el-select v-model="examForm.classId" clearable placeholder="不选则全体学生"><el-option v-for="item in validClasses" :key="item.id" :label="classLabel(item)" :value="item.id" /></el-select></el-form-item>
+          <el-form-item v-if="canManageExamAccess" label="负责教师"><el-select v-model="examForm.responsibleTeacherIds" multiple filterable clearable placeholder="不选则所有教职工可见"><el-option v-for="item in teachers" :key="item.id" :label="item.displayName || item.username" :value="item.id" /></el-select></el-form-item>
+          <el-form-item v-if="canManageExamAccess" label="学生成绩可见性"><el-checkbox v-model="examForm.showLiveScore">考试中显示实时分数</el-checkbox><el-checkbox v-model="examForm.showFinalScore">考试结束后显示最终分数</el-checkbox></el-form-item>
+          <el-form-item label="考试防作弊监控"><el-checkbox v-model="examForm.cameraEnabled">启用摄像头</el-checkbox><el-checkbox v-model="examForm.screenRecordingEnabled">启用屏幕录制</el-checkbox><p class="hint">考生需授权所选设备才能开始答题。启用两项时，录像会包含屏幕和摄像头画面。</p></el-form-item>
           <el-form-item label="知识库"><el-select v-model="examForm.knowledgeBaseId" clearable><el-option v-for="item in knowledgeBases" :key="item.id" :label="item.knowledgeBaseName" :value="item.id" /></el-select></el-form-item>
           <el-form-item label="人工智能考试模板"><el-select v-model="examForm.processTemplateId" clearable><el-option v-for="item in templates" :key="item.id" :label="item.templateName" :value="item.id" /></el-select><p class="hint">模板中可为每一轮指定知识点；未选模板时从知识库随机出题。</p></el-form-item>
-          <div class="number-grid"><el-form-item label="基础答题轮数"><el-input-number v-model="examForm.questionRounds" :min="1" :max="20" /></el-form-item><el-form-item label="最多答题轮数"><el-input-number v-model="examForm.maxQuestionRounds" :min="examForm.questionRounds" :max="Math.min(40, examForm.questionRounds + 20)" /></el-form-item><el-form-item label="及格分"><el-input-number v-model="examForm.passingScore" :min="0" :max="100" /></el-form-item><el-form-item label="追问阈值"><el-input-number v-model="examForm.followUpThreshold" :min="0" :max="100" /></el-form-item><el-form-item label="允许切屏次数"><el-input-number v-model="examForm.antiCheatSwitchLimit" :min="1" :max="20" /></el-form-item><el-form-item label="切屏超限动作"><el-select v-model="examForm.antiCheatAction"><el-option label="立即交卷" value="SUBMIT" /><el-option label="进入下一阶段" value="NEXT_STAGE" /></el-select></el-form-item></div>
-          <p class="hint">最多答题轮数包含基础题和追问；每个 AI 阶段达到上限后立即结束，不会因分数未及格继续出题。切屏达到上限后立即执行所选动作。</p>
+          <div class="number-grid"><el-form-item label="基础答题轮数"><el-input-number v-model="examForm.questionRounds" :min="1" :max="20" /></el-form-item><el-form-item label="最多追问轮数"><el-input-number v-model="examForm.followUpRounds" :min="0" :max="20" /></el-form-item><el-form-item label="最多答题轮数"><el-input-number v-model="examForm.maxQuestionRounds" :min="examForm.questionRounds" :max="Math.min(40, examForm.questionRounds + examForm.followUpRounds)" /></el-form-item><el-form-item label="及格分"><el-input-number v-model="examForm.passingScore" :min="0" :max="100" /></el-form-item><el-form-item label="追问阈值"><el-input-number v-model="examForm.followUpThreshold" :min="0" :max="100" /></el-form-item><el-form-item label="允许切屏次数"><el-input-number v-model="examForm.antiCheatSwitchLimit" :min="1" :max="20" /></el-form-item><el-form-item label="切屏超限动作"><el-select v-model="examForm.antiCheatAction"><el-option label="立即交卷" value="SUBMIT" /><el-option label="进入下一阶段" value="NEXT_STAGE" /></el-select></el-form-item></div>
+          <p class="hint">最多追问轮数控制基础轮数外可增加的轮数；最多答题轮数是每个 AI 阶段的总上限，不能超过两者之和。到达总上限后即使未及格也会结束。切屏达到上限后立即执行所选动作。</p>
           <el-form-item label="开放时间"><el-date-picker v-model="examForm.publishStart" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="开始时间" /><span class="date-separator">至</span><el-date-picker v-model="examForm.publishEnd" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="结束时间" /></el-form-item>
           <el-form-item label="考试说明"><el-input v-model="examForm.instructions" type="textarea" :rows="3" /></el-form-item>
           <el-form-item label="发布状态"><el-radio-group v-model="examForm.status"><el-radio-button value="DRAFT">草稿</el-radio-button><el-radio-button value="PUBLISHED">发布</el-radio-button><el-radio-button value="CLOSED">关闭</el-radio-button></el-radio-group></el-form-item>
           <div class="actions"><el-button type="primary" @click="saveExam">保存考试</el-button><el-button @click="resetExam">新建</el-button></div>
         </el-form>
         <section class="list-panel"><div class="panel-head"><h2>已发布考试</h2><el-button @click="loadExams">刷新</el-button></div>
-          <el-table :data="exams" height="620" @row-click="editExam"><el-table-column prop="examName" label="考试" min-width="170" /><el-table-column prop="className" label="班级" /><el-table-column prop="questionRounds" label="基础轮数" width="90" /><el-table-column prop="maxQuestionRounds" label="最多轮数" width="90" /><el-table-column prop="passingScore" label="及格" width="80" /><el-table-column prop="templateName" label="考试模板" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">{{ statusLabel(row.status) }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" :disabled="Number(row.attemptCount || 0) > 0" @click.stop="removeExam(row)">删除</el-button></template></el-table-column></el-table>
+          <el-table :data="exams" height="620" @row-click="editExam"><el-table-column prop="examName" label="考试" min-width="170" /><el-table-column prop="className" label="班级" /><el-table-column prop="questionRounds" label="基础轮数" width="90" /><el-table-column prop="followUpRounds" label="追问上限" width="90" /><el-table-column prop="maxQuestionRounds" label="最多轮数" width="90" /><el-table-column prop="passingScore" label="及格" width="80" /><el-table-column prop="templateName" label="考试模板" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">{{ statusLabel(row.status) }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" :disabled="Number(row.attemptCount || 0) > 0" @click.stop="removeExam(row)">删除</el-button></template></el-table-column></el-table>
         </section>
       </section>
 
@@ -73,6 +76,7 @@
       <el-dialog v-model="attemptDialogVisible" :title="selectedAttempt.fullName ? `${selectedAttempt.fullName} 的答题记录` : '答题记录'" width="min(900px, calc(100vw - 32px))" class="attempt-dialog">
         <div v-loading="attemptLoading">
           <div v-if="selectedAttempt.processId" class="attempt-summary"><div><span>考试</span><strong>{{ selectedAttempt.examName }}</strong></div><div><span>学号 / 班级</span><strong>{{ selectedAttempt.studentNo }} · {{ selectedAttempt.className }}</strong></div><div><span>当前状态</span><strong>{{ attemptStatusLabel(selectedAttempt.overallStatus) }}</strong></div><div><span>已完成题数</span><strong>{{ selectedAttempt.answeredRounds || 0 }}</strong></div></div>
+          <div v-if="selectedAttempt.recordings?.length" class="answer-records"><h3>防作弊录像</h3><el-button v-for="segment in selectedAttempt.recordings" :key="segment.segmentNo" size="small" @click="schoolApi.openExamRecording(selectedAttempt.processId, segment.segmentNo)">查看第 {{ segment.segmentNo + 1 }} 段</el-button></div>
           <div v-if="selectedAttempt.records?.length" class="answer-records"><article v-for="record in selectedAttempt.records" :key="record.id" class="answer-record"><div class="record-head"><div><span>{{ record.stageName || 'AI 答题' }} · 第 {{ record.sequenceNo }} 轮</span><strong>{{ record.knowledgePoint }}</strong></div><el-tag :type="record.answerStatus === 'COMPLETED' ? 'success' : 'warning'">{{ answerStatusLabel(record.answerStatus) }}</el-tag></div><div class="record-section"><span>题目</span><p>{{ record.questionContent }}</p></div><div class="record-section"><span>回答</span><p>{{ record.answerContent || '尚未提交回答。' }}</p></div><div class="record-scores"><strong>得分 {{ scoreText(record.averageScore) }}</strong></div><div v-if="record.interviewerComment" class="record-section"><span>评语</span><p>{{ record.interviewerComment }}</p></div></article></div>
           <div v-else-if="selectedAttempt.processId && !attemptLoading" class="empty-records">该考生尚未生成答题记录。</div>
         </div>
@@ -87,8 +91,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import AdminNav from '../components/AdminNav.vue'
 import { interviewApi, schoolApi } from '../services/api'
+import { readSessionUser } from '../utils/session'
 
 const route = useRoute()
+const canManageExamAccess = ['IT_ADMIN', 'SYSTEM_ADMIN', 'HR_ADMIN', 'DEPARTMENT_HEAD'].includes(readSessionUser()?.roleCode)
+const teachers = ref([])
 const mode = computed(() => route.meta.schoolMode || 'exams')
 const titles = { classes: ['班级管理', '维护专业与班级，支持批量导入。'], students: ['学生管理', '维护学生档案，学生可通过班级、姓名和学号进入考试。'], exams: ['考试发布', '发布给指定班级或全体学生的人工智能考试。'], analytics: ['得分分析', '从全局答题结果汇总得分率、失分率和知识点掌握情况。'] }
 const title = computed(() => titles[mode.value]?.[0] || '考试管理')
@@ -99,7 +106,7 @@ const classes = ref([]); const students = ref([]); const exams = ref([]); const 
 const classKeyword = ref(''); const studentKeyword = ref(''); const studentClassId = ref(null)
 const classForm = reactive({ id: null, majorName: '', className: '', classCode: '', description: '', status: 1 })
 const studentForm = reactive({ id: null, studentNo: '', fullName: '', classId: null, status: 1 })
-const examForm = reactive({ id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', publishStart: '', publishEnd: '', status: 'DRAFT' })
+const examForm = reactive({ id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, followUpRounds: 2, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', cameraEnabled: false, screenRecordingEnabled: false, publishStart: '', publishEnd: '', status: 'DRAFT', responsibleTeacherIds: [], showLiveScore: true, showFinalScore: true })
 const analyticsFilter = reactive({ examId: null, classId: null }); const analytics = reactive({ examCount: 0, studentCount: 0, completedStudentCount: 0, scoreRate: 0, lossRate: 0, aiSummary: '', knowledgePoints: [], students: [] })
 const attemptDialogVisible = ref(false); const attemptLoading = ref(false); const selectedAttempt = reactive({ records: [] })
 const validClasses = computed(() => Array.isArray(classes.value) ? classes.value.filter(item => item && item.id != null) : [])
@@ -113,10 +120,10 @@ function classLabel(item) {
 }
 function resetClass() { Object.assign(classForm, { id: null, majorName: '', className: '', classCode: '', description: '', status: 1 }) }
 function resetStudent() { Object.assign(studentForm, { id: null, studentNo: '', fullName: '', classId: null, status: 1 }) }
-function resetExam() { Object.assign(examForm, { id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', publishStart: '', publishEnd: '', status: 'DRAFT' }) }
+function resetExam() { Object.assign(examForm, { id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, followUpRounds: 2, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', cameraEnabled: false, screenRecordingEnabled: false, publishStart: '', publishEnd: '', status: 'DRAFT', responsibleTeacherIds: [], showLiveScore: true, showFinalScore: true }) }
 function editClass(row) { Object.assign(classForm, row) }
 function editStudent(row) { Object.assign(studentForm, row) }
-function editExam(row) { Object.assign(examForm, { ...row, publishStart: row.publishStart || '', publishEnd: row.publishEnd || '' }) }
+function editExam(row) { Object.assign(examForm, { ...row, showLiveScore: Number(row.showLiveScore) === 1, showFinalScore: Number(row.showFinalScore) === 1, cameraEnabled: Number(row.cameraEnabled) === 1, screenRecordingEnabled: Number(row.screenRecordingEnabled) === 1, publishStart: row.publishStart || '', publishEnd: row.publishEnd || '' }) }
 function statusLabel(status) { return ({ DRAFT: '草稿', PUBLISHED: '已发布', CLOSED: '已关闭' })[status] || status }
 function attemptStatusLabel(status) { return ({ IN_PROGRESS: '答题中', COMPLETED: '已完成', REJECTED: '已结束', TERMINATED: '已终止' })[status] || status || '未开始' }
 function answerStatusLabel(status) { return ({ PENDING: '待回答', PROCESSING: '评分中', COMPLETED: '已完成', FAILED: '处理失败' })[status] || status || '待回答' }
@@ -162,8 +169,9 @@ async function removeStudent(row) {
 }
 async function saveStudent() { if (!studentForm.classId) { ElMessage.warning('请选择班级'); return } try { await schoolApi.saveStudent({ ...studentForm }); ElMessage.success('学生已保存'); resetStudent(); await loadStudents() } catch (error) { fail(error) } }
 async function saveExam() {
-  if (examForm.maxQuestionRounds < examForm.questionRounds || examForm.maxQuestionRounds > Math.min(40, examForm.questionRounds + 20)) { ElMessage.warning('最多答题轮数须介于基础答题轮数和基础轮数加 20 之间，且不能超过 40'); return }
-  const payload = { ...examForm, followUpRounds: examForm.maxQuestionRounds - examForm.questionRounds, publishStart: examForm.publishStart || null, publishEnd: examForm.publishEnd || null }
+  if (examForm.maxQuestionRounds < examForm.questionRounds || examForm.maxQuestionRounds > Math.min(40, examForm.questionRounds + examForm.followUpRounds)) { ElMessage.warning('最多答题轮数不能小于基础轮数，也不能超过基础轮数与追问上限之和'); return }
+  const payload = { ...examForm, publishStart: examForm.publishStart || null, publishEnd: examForm.publishEnd || null }
+  if (!canManageExamAccess) { delete payload.responsibleTeacherIds; delete payload.showLiveScore; delete payload.showFinalScore }
   try { await schoolApi.saveExam(payload); ElMessage.success('考试已保存'); resetExam(); await loadExams() } catch (error) { fail(error) }
 }
 async function removeExam(row) {
@@ -189,8 +197,8 @@ async function openAttempt(row) {
   if (processId == null || processId === '') { fail(new Error('答题记录缺少流程编号，请刷新后重试')); return }
   attemptDialogVisible.value = true
   attemptLoading.value = true
-  Object.assign(selectedAttempt, { ...row, processId, records: [] })
-  try { Object.assign(selectedAttempt, (await schoolApi.getAdminAttempt(processId)).data) } catch (error) { fail(error) } finally { attemptLoading.value = false }
+  Object.assign(selectedAttempt, { ...row, processId, records: [], recordings: [] })
+  try { const [details, recordings] = await Promise.all([schoolApi.getAdminAttempt(processId), schoolApi.listExamRecordings(processId)]); Object.assign(selectedAttempt, details.data, { recordings: recordings.data || [] }) } catch (error) { fail(error) } finally { attemptLoading.value = false }
 }
 async function continueAttempt(row) {
   try { await ElMessageBox.confirm('将清零切屏次数并从中止断点继续，是否确认？', '继续考试', { type: 'warning' }); await schoolApi.continueAttempt(row.processId); ElMessage.success('已允许继续考试'); await loadAnalytics() } catch (error) { if (error !== 'cancel' && error !== 'close') fail(error) }
@@ -198,7 +206,8 @@ async function continueAttempt(row) {
 async function restartAttempt(row) {
   try { await ElMessageBox.confirm('打回后将清空全部答题和计数，重新抽题，是否确认？', '打回考试', { type: 'warning' }); await schoolApi.restartAttempt(row.processId); ElMessage.success('考试已打回'); await loadAnalytics() } catch (error) { if (error !== 'cancel' && error !== 'close') fail(error) }
 }
-async function loadMode() { await loadClasses(); if (mode.value === 'students') await loadStudents(); if (mode.value === 'exams') { await Promise.all([loadExams(), loadDependencies()]) } if (mode.value === 'analytics') { await Promise.all([loadExams(), loadAnalytics()]) } }
+async function loadMode() { await loadClasses(); if (mode.value === 'students') await loadStudents(); if (mode.value === 'exams') { await Promise.all([loadExams(), loadDependencies(), loadTeachers()]) } if (mode.value === 'analytics') { await Promise.all([loadExams(), loadAnalytics()]) } }
+async function loadTeachers() { if (!canManageExamAccess) return; try { teachers.value = (await schoolApi.listAssignableTeachers()).data || [] } catch (error) { fail(error) } }
 onMounted(loadMode); watch(() => route.fullPath, loadMode)
 </script>
 

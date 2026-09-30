@@ -56,12 +56,14 @@ public class AuthServiceImpl implements AuthService {
 
     private static final Set<String> DEFAULT_USERNAMES = Set.of("itadmin", "hradmin", "hruser");
     private static final Set<String> ALLOWED_ROLE_CODES = Set.of("IT_ADMIN", "HR_ADMIN", "HR_USER", "STUDENT", "SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
-    private static final Set<String> STAFF_ROLE_CODES = Set.of("SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
+    private static final Set<String> STAFF_ROLE_CODES = Set.of("SYSTEM_ADMIN", "HR_ADMIN", "HR_USER", "DEPARTMENT_HEAD", "LECTURER");
     private static final List<String> USER_REFERENCE_QUERIES = List.of(
-            "SELECT COUNT(*) FROM recruitment_candidate WHERE interviewee_user_id = ?",
-            "SELECT COUNT(*) FROM interview_process WHERE interviewee_user_id = ? OR approved_hr_user_id = ?",
-            "SELECT COUNT(*) FROM interview_video_session WHERE approver_user_id = ?",
-            "SELECT COUNT(*) FROM interview_process_stage WHERE approved_hr_user_id = ?"
+            "SELECT COUNT(*) FROM school_exam_candidate WHERE interviewee_user_id = ?",
+            "SELECT COUNT(*) FROM school_exam_process WHERE interviewee_user_id = ? OR approved_hr_user_id = ?",
+            "SELECT COUNT(*) FROM school_video_session WHERE approver_user_id = ?",
+            "SELECT COUNT(*) FROM school_exam_process_stage WHERE approved_hr_user_id = ?",
+            "SELECT COUNT(*) FROM school_exam_teacher WHERE user_id = ?",
+            "SELECT COUNT(*) FROM school_score_review WHERE operator_user_id = ?"
     );
 
     private final SysUserMapper sysUserMapper;
@@ -165,13 +167,13 @@ public class AuthServiceImpl implements AuthService {
                         .or().like(SysUser::getMobilePhone, keyword))
                 .orderByAsc(SysUser::getId);
         if (StrUtil.equals(operatorRoleCode, "HR_ADMIN")) {
-            wrapper.in(SysUser::getRoleCode, "HR_USER");
+            wrapper.in(SysUser::getRoleCode, "HR_USER", "LECTURER", "SYSTEM_ADMIN", "IT_ADMIN");
         } else if (StrUtil.equals(operatorRoleCode, "DEPARTMENT_HEAD")) {
             wrapper.eq(SysUser::getRoleCode, "LECTURER");
         } else if (StrUtil.equals(operatorRoleCode, "IT_ADMIN")) {
-            wrapper.in(SysUser::getRoleCode, "IT_ADMIN", "SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER");
+            wrapper.in(SysUser::getRoleCode, "IT_ADMIN", "SYSTEM_ADMIN", "HR_ADMIN", "HR_USER", "DEPARTMENT_HEAD", "LECTURER");
         } else if (StrUtil.equals(operatorRoleCode, "SYSTEM_ADMIN")) {
-            wrapper.in(SysUser::getRoleCode, "DEPARTMENT_HEAD", "LECTURER");
+            wrapper.in(SysUser::getRoleCode, "HR_ADMIN", "HR_USER", "DEPARTMENT_HEAD", "LECTURER");
         } else {
             wrapper.eq(StrUtil.isNotBlank(roleCode), SysUser::getRoleCode, roleCode);
         }
@@ -452,7 +454,7 @@ public class AuthServiceImpl implements AuthService {
 
     private boolean canManageRole(String targetRole, String operatorRole) {
         if (StrUtil.equals(operatorRole, "IT_ADMIN")) return !StrUtil.equals(targetRole, "IT_ADMIN");
-        if (StrUtil.equals(operatorRole, "SYSTEM_ADMIN")) return StrUtil.equalsAny(targetRole, "DEPARTMENT_HEAD", "LECTURER");
+        if (StrUtil.equals(operatorRole, "SYSTEM_ADMIN")) return StrUtil.equalsAny(targetRole, "HR_ADMIN", "HR_USER", "DEPARTMENT_HEAD", "LECTURER");
         if (StrUtil.equals(operatorRole, "HR_ADMIN")) return StrUtil.equalsAny(targetRole, "HR_USER");
         if (StrUtil.equals(operatorRole, "DEPARTMENT_HEAD")) return StrUtil.equals(targetRole, "LECTURER");
         return false;

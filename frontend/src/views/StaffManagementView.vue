@@ -21,7 +21,7 @@
           <el-table-column label="角色" width="130"><template #default="{ row }">{{ roleLabel(row.roleCode) }}</template></el-table-column>
           <el-table-column prop="mobilePhone" label="手机号" min-width="130" />
           <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">{{ Number(row.status) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button text type="primary" @click.stop="edit(row)">编辑</el-button></template></el-table-column>
+          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button v-if="canEdit(row)" text type="primary" @click.stop="edit(row)">编辑</el-button></template></el-table-column>
         </el-table>
       </section>
     </section>
@@ -38,15 +38,17 @@ import { readSessionUser } from '../utils/session'
 const session = readSessionUser() || {}
 const users = ref([]); const loading = ref(false); const saving = ref(false)
 const form = reactive({ id: null, username: '', displayName: '', roleCode: 'LECTURER', mobilePhone: '', email: '', password: '', status: 1 })
-const allRoles = [{ value: 'SYSTEM_ADMIN', label: '系统管理员' }, { value: 'DEPARTMENT_HEAD', label: '系主任' }, { value: 'LECTURER', label: '讲师' }]
+const allRoles = [{ value: 'SYSTEM_ADMIN', label: '系统管理员' }, { value: 'IT_ADMIN', label: '系统管理员' }, { value: 'HR_ADMIN', label: '教师管理员' }, { value: 'HR_USER', label: '教师' }, { value: 'DEPARTMENT_HEAD', label: '系主任' }, { value: 'LECTURER', label: '讲师' }]
 const roleOptions = computed(() => {
   if (session.roleCode === 'DEPARTMENT_HEAD') return allRoles.filter(item => item.value === 'LECTURER')
-  if (session.roleCode === 'SYSTEM_ADMIN') return allRoles.filter(item => ['DEPARTMENT_HEAD', 'LECTURER'].includes(item.value))
-  return allRoles
+  if (session.roleCode === 'HR_ADMIN') return allRoles.filter(item => item.value === 'HR_USER')
+  if (session.roleCode === 'SYSTEM_ADMIN') return allRoles.filter(item => ['HR_ADMIN', 'HR_USER', 'DEPARTMENT_HEAD', 'LECTURER'].includes(item.value))
+  return allRoles.filter(item => item.value !== 'IT_ADMIN')
 })
 function roleLabel(value) { return allRoles.find(item => item.value === value)?.label || value }
+function canEdit(row) { if (session.roleCode === 'HR_ADMIN') return row.roleCode === 'HR_USER'; if (session.roleCode === 'DEPARTMENT_HEAD') return row.roleCode === 'LECTURER'; if (session.roleCode === 'SYSTEM_ADMIN') return ['HR_ADMIN', 'HR_USER', 'DEPARTMENT_HEAD', 'LECTURER'].includes(row.roleCode); return row.roleCode !== 'IT_ADMIN' }
 function reset() { Object.assign(form, { id: null, username: '', displayName: '', roleCode: roleOptions.value[0]?.value || 'LECTURER', mobilePhone: '', email: '', password: '', status: 1 }) }
-function edit(row) { Object.assign(form, { ...row, password: '' }) }
+function edit(row) { if (canEdit(row)) Object.assign(form, { ...row, password: '' }) }
 async function load() { loading.value = true; try { users.value = (await authApi.listUsers({ roleCode: undefined, pageSize: 200 })).data || [] } catch (error) { ElMessage.error(error.message || '教职工加载失败') } finally { loading.value = false } }
 function downloadBlob(blob, filename) { const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url) }
 async function downloadTemplate() { try { downloadBlob(await authApi.downloadStaffTemplate(), 'staff-import-template.xls') } catch (error) { ElMessage.error(error.message || '模板下载失败') } }

@@ -285,7 +285,7 @@ public class HrServiceImpl implements HrService {
         dashboard.setPerformanceBindingCount(integrationBindingMapper.selectCount(new LambdaQueryWrapper<IntegrationBinding>()
                 .eq(IntegrationBinding::getModuleCode, "PERFORMANCE")));
         YearMonth currentMonth = YearMonth.now(BUSINESS_ZONE);
-        dashboard.setOpenJobCount(jdbc.queryForObject("SELECT COUNT(*) FROM recruitment_job WHERE status=1 AND (close_date IS NULL OR close_date>=?)", Long.class, LocalDate.now(BUSINESS_ZONE)));
+        dashboard.setOpenJobCount(jdbc.queryForObject("SELECT COUNT(*) FROM school_assessment_config WHERE status=1 AND (close_date IS NULL OR close_date>=?)", Long.class, LocalDate.now(BUSINESS_ZONE)));
         dashboard.setCurrentMonthHireCount(jdbc.queryForObject("SELECT COUNT(*) FROM hr_employee WHERE hire_date>=? AND hire_date<=?", Long.class, currentMonth.atDay(1), currentMonth.atEndOfMonth()));
         dashboard.setCurrentMonthDismissalCount(jdbc.queryForObject("SELECT COUNT(*) FROM hr_employee WHERE dismissal_date>=? AND dismissal_date<=?", Long.class, currentMonth.atDay(1), currentMonth.atEndOfMonth()));
         HrStatisticsVO statistics = hrStatisticsService.statistics(currentMonth.toString());

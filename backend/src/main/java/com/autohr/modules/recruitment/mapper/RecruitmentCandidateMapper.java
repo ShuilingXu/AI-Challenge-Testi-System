@@ -16,23 +16,23 @@ public interface RecruitmentCandidateMapper extends BaseMapper<RecruitmentCandid
             + "major, application_status AS applicationStatus, interview_stage_status AS interviewStageStatus, "
             + "interviewee_user_id AS intervieweeUserId, interview_process_id AS interviewProcessId, "
             + "created_at AS createdAt, updated_at AS updatedAt "
-            + "FROM recruitment_candidate WHERE id=#{id}")
+            + "FROM school_exam_candidate WHERE id=#{id}")
     RecruitmentCandidate selectSchoolCandidateById(Long id);
 
     @Select("SELECT id, job_id AS jobId, full_name AS fullName, mobile_phone AS mobilePhone, "
             + "major, application_status AS applicationStatus, interview_stage_status AS interviewStageStatus, "
             + "interviewee_user_id AS intervieweeUserId, interview_process_id AS interviewProcessId, "
             + "created_at AS createdAt, updated_at AS updatedAt "
-            + "FROM recruitment_candidate WHERE job_id=#{jobId} AND interviewee_user_id=#{userId} LIMIT 1")
+            + "FROM school_exam_candidate WHERE job_id=#{jobId} AND interviewee_user_id=#{userId} LIMIT 1")
     RecruitmentCandidate selectSchoolCandidate(Long jobId, Long userId);
 
-    @Insert("INSERT INTO recruitment_candidate "
+    @Insert("INSERT INTO school_exam_candidate "
             + "(job_id, full_name, mobile_phone, major, application_status, interview_stage_status, interviewee_user_id) "
             + "VALUES (#{jobId}, #{fullName}, #{mobilePhone}, #{major}, #{applicationStatus}, #{interviewStageStatus}, #{intervieweeUserId})")
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insertSchoolCandidate(RecruitmentCandidate candidate);
 
-    @org.apache.ibatis.annotations.Update("UPDATE recruitment_candidate SET interview_process_id=#{interviewProcessId}, "
+    @org.apache.ibatis.annotations.Update("UPDATE school_exam_candidate SET interview_process_id=#{interviewProcessId}, "
             + "application_status=#{applicationStatus}, interview_stage_status=#{interviewStageStatus}, updated_at=CURRENT_TIMESTAMP "
             + "WHERE id=#{id}")
     int updateSchoolCandidate(RecruitmentCandidate candidate);

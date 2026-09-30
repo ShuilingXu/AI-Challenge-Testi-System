@@ -12,6 +12,7 @@ A web application for class-scoped AI examinations. Teachers maintain the class 
 - Generates questions, scores direct written answers, and completes the exam after the configured final round.
 - Reports each student's score rate, loss rate, completed rounds, knowledge-point performance, and AI learning summary.
 - Aggregates completed attempts into class score/loss rates, knowledge-point analytics, student rows, and an AI class summary.
+- Supports teacher-scoped exam results, per-question score reviews, and separate live/final student score visibility.
 
 The former HR, recruiting, resume, and video-interview routes are not exposed by the current security policy. Some internal interview-process entities remain as the execution engine for the school examination lifecycle.
 
@@ -22,9 +23,9 @@ The former HR, recruiting, resume, and video-interview routes are not exposed by
 | `IT_ADMIN` | School system administrator and teacher workspace administrator |
 | `HR_ADMIN` | Teacher workspace administrator |
 | `HR_USER` | Teacher workspace user |
-| `INTERVIEWEE` | Student examination account created during roster-verified entry |
+| `STUDENT` | Student examination account created during roster-verified entry |
 
-The existing role codes are retained for data compatibility. In the school UI, the first three roles are teacher/administrator roles and `INTERVIEWEE` is used only for the student examination experience.
+The existing staff role codes are retained for data compatibility. `SYSTEM_ADMIN`, `DEPARTMENT_HEAD`, and `LECTURER` are also supported; `STUDENT` is used for the student examination experience.
 
 ## Teacher Workflow
 
@@ -34,6 +35,9 @@ The existing role codes are retained for data compatibility. In the school UI, t
 4. Maintain knowledge bases and optional per-round templates at `/admin/knowledge`.
 5. Create an exam at `/admin/exams`, select its class, knowledge base or template, question-round count, pass score, and publication window, then set it to `PUBLISHED`.
 6. Monitor completed attempts and mastery analytics at `/admin/analytics`.
+7. Search by class, exam, name, or student number at `/admin/score-review`. Open an attempt to review individual answers and save a revised score with an optional teacher-only note. Score changes are recorded in the review and system audit tables.
+
+Exam administrators can assign multiple responsible teachers. When none are assigned, all teaching staff can view the exam. The exam form also controls whether students can see scores during the exam and after it ends.
 
 IT administrators can configure the OpenAI-compatible endpoint, model, default prompt, and per-function prompt overrides at `/admin/settings`. The function overrides cover question/follow-up generation, answer scoring, and learning summaries; leave an override blank to inherit the default prompt. Changes are written to `.env` and take effect after restarting the backend.
 
@@ -104,6 +108,8 @@ npm run dev
 ```
 
 The backend runs on `http://localhost:8081` and the Vite frontend runs on `http://localhost:3000`. The development profile uses SQLite when a database URL is not supplied; schema migrations create the school tables automatically.
+
+On startup, the migration runner renames active `recruitment_*` and `interview_*` tables to `school_*` names in place before adding new columns and tables. Existing rows and IDs remain in their original tables. If both an old and a new name exist, startup stops for manual reconciliation instead of overwriting either table. Retired HR tables with historical rows are left untouched. Back up a production database before upgrading.
 
 Default bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`, each initially using `123456`. They must change the initial password unless explicitly exempted through deployment configuration.
 

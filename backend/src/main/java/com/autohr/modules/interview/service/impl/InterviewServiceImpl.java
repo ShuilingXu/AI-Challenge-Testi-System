@@ -91,6 +91,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -169,6 +170,8 @@ public class InterviewServiceImpl implements InterviewService {
     private final SystemConfigService systemConfigService;
     private final SecretValueCipher secretValueCipher;
     private final TransactionTemplate transactionTemplate;
+    @Resource
+    private JdbcTemplate schoolScoreJdbc;
 
     @Resource(name = "interviewAiExecutor")
     private TaskExecutor interviewAiExecutor;
@@ -773,7 +776,7 @@ public class InterviewServiceImpl implements InterviewService {
 
     @Override
     public InterviewVO getIntervieweeProcess(Long processId, Long intervieweeUserId) {
-        return toIntervieweeProcessVO(requireIntervieweeProcess(processId, intervieweeUserId));
+        return maskStudentScore(toIntervieweeProcessVO(requireIntervieweeProcess(processId, intervieweeUserId)));
     }
 
     @Override
@@ -857,7 +860,7 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     public InterviewVO getIntervieweeNextAiQuestion(Long processId, Long intervieweeUserId) {
         requireIntervieweeProcess(processId, intervieweeUserId);
-        return getNextAiQuestion(processId);
+        return maskStudentScore(getNextAiQuestion(processId));
     }
 
     @Override
@@ -889,7 +892,7 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     public InterviewVO submitIntervieweeAiAnswer(AiAnswerRequest request, Long intervieweeUserId) {
         requireIntervieweeProcess(request.getProcessId(), intervieweeUserId);
-        return submitAiAnswer(request);
+        return maskStudentScore(submitAiAnswer(request));
     }
 
     @Override
@@ -905,7 +908,7 @@ public class InterviewServiceImpl implements InterviewService {
                         throw new BusinessException("流式输出失败: " + abbreviate(ex.getMessage()));
                     }
                 });
-                sendSse(emitter, "done", result);
+                sendSse(emitter, "done", maskStudentScore(result));
                 emitter.complete();
             } catch (Exception ex) {
                 String errorId = UUID.randomUUID().toString();
@@ -988,7 +991,26 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     public List<InterviewVO> listIntervieweeAiRecords(Long processId, Long intervieweeUserId) {
         requireIntervieweeProcess(processId, intervieweeUserId);
-        return listAiRecords(processId);
+        return listAiRecords(processId).stream().map(this::maskStudentScore).toList();
+    }
+
+    private InterviewVO maskStudentScore(InterviewVO value) {
+        if (value == null || value.getProcessId() == null || schoolScoreJdbc == null) return value;
+        List<java.util.Map<String, Object>> policy = schoolScoreJdbc.queryForList(
+                "SELECT e.show_live_score AS liveScore,e.show_final_score AS finalScore,p.overall_status AS status "
+                + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id "
+                + "JOIN school_exam_process p ON p.id=a.process_id WHERE a.process_id=?", value.getProcessId());
+        if (policy.isEmpty()) return value;
+        java.util.Map<String, Object> row = policy.get(0);
+        boolean finished = !"IN_PROGRESS".equals(String.valueOf(row.get("status")));
+        Object enabled = row.get(finished ? "finalScore" : "liveScore");
+        if (enabled instanceof Number number && number.intValue() == 1) return value;
+        value.setAiAverageScore(null);
+        value.setAverageScore(null);
+        value.setInterviewerScore(null);
+        value.setScorerScore(null);
+        value.setInterviewerComment(null);
+        return value;
     }
 
     private InterviewAiRecord requireRequestedAiRecord(InterviewProcess process, AiAnswerRequest request) {
@@ -3947,7 +3969,7 @@ public class InterviewServiceImpl implements InterviewService {
                 vo.setStageType(active.getStageType());
             }
         }
-        return vo;
+        return maskStudentScore(vo);
     }
 
     private InterviewVO toAiRecordVO(InterviewAiRecord entity, InterviewProcess process) {
