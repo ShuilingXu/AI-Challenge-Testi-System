@@ -851,7 +851,9 @@ public class InterviewServiceImpl implements InterviewService {
                 .eq(InterviewAiRecord::getProcessId, processId)
                 .eq(InterviewAiRecord::getQuestionStatus, "READY")
                 .and(query -> query.isNull(InterviewAiRecord::getAnswerContent)
-                        .or().eq(InterviewAiRecord::getAnswerStatus, "FAILED"))
+                        .or().eq(InterviewAiRecord::getAnswerStatus, "FAILED")
+                        .or(expired -> expired.eq(InterviewAiRecord::getAnswerStatus, "PROCESSING")
+                                .le(InterviewAiRecord::getAnswerLeaseExpiresAt, LocalDateTime.now())))
                 .orderByAsc(InterviewAiRecord::getSequenceNo)
                 .last("LIMIT 1"));
         return unanswered == null ? null : toAiRecordVO(unanswered, process);
@@ -1033,7 +1035,9 @@ public class InterviewServiceImpl implements InterviewService {
                 .eq(InterviewAiRecord::getProcessStageId, stage.getId())
                 .eq(InterviewAiRecord::getQuestionStatus, "READY")
                 .and(query -> query.isNull(InterviewAiRecord::getAnswerContent)
-                        .or().eq(InterviewAiRecord::getAnswerStatus, "FAILED"))
+                        .or().eq(InterviewAiRecord::getAnswerStatus, "FAILED")
+                        .or(expired -> expired.eq(InterviewAiRecord::getAnswerStatus, "PROCESSING")
+                                .le(InterviewAiRecord::getAnswerLeaseExpiresAt, LocalDateTime.now())))
                 .orderByAsc(InterviewAiRecord::getSequenceNo)
                 .last("LIMIT 1"));
         return unanswered == null ? null : toAiRecordVO(unanswered, process);
@@ -2324,6 +2328,22 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewProcess process = requireProcess(processId);
         if (!Objects.equals(process.getIntervieweeUserId(), intervieweeUserId)) {
             throw new BusinessException("无权访问该面试流程");
+        }
+        // The execution endpoints must enforce roster changes too: a JWT can
+        // remain valid after a teacher disables a student or their class.
+        if (schoolScoreJdbc != null) {
+            List<Map<String, Object>> roster = schoolScoreJdbc.queryForList(
+                    "SELECT s.user_id AS userId,s.status AS studentStatus,c.status AS classStatus "
+                            + "FROM school_exam_attempt a LEFT JOIN school_student s ON s.id=a.student_id "
+                            + "LEFT JOIN school_class c ON c.id=s.class_id WHERE a.process_id=?", processId);
+            if (!roster.isEmpty()) {
+                Map<String, Object> row = roster.get(0);
+                if (!(row.get("userId") instanceof Number userId && userId.longValue() == intervieweeUserId)
+                        || !(row.get("studentStatus") instanceof Number studentStatus && studentStatus.intValue() == 1)
+                        || !(row.get("classStatus") instanceof Number classStatus && classStatus.intValue() == 1)) {
+                    throw new BusinessException("学生档案或班级已停用，请联系教师");
+                }
+            }
         }
         return process;
     }

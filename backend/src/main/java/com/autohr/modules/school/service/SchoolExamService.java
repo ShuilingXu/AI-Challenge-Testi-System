@@ -117,6 +117,10 @@ public class SchoolExamService {
 
     @Transactional
     public Map<String, Object> saveClass(SchoolClassSaveRequest request) {
+        requireMaxLength(request.getMajorName(), 128, "专业");
+        requireMaxLength(request.getClassName(), 128, "班级名称");
+        requireMaxLength(request.getClassCode(), 64, "班级代码");
+        requireMaxLength(request.getDescription(), 1000, "说明");
         requireClassCodeAvailable(request.getClassCode(), request.getId());
         int status = request.getStatus() == null ? 1 : request.getStatus();
         if (!List.of(0, 1).contains(status)) throw new BusinessException("班级状态无效");
@@ -148,6 +152,8 @@ public class SchoolExamService {
 
     @Transactional
     public Map<String, Object> saveStudent(SchoolStudentSaveRequest request) {
+        requireMaxLength(request.getStudentNo(), 64, "学号");
+        requireMaxLength(request.getFullName(), 64, "姓名");
         requireActiveClass(request.getClassId());
         requireStudentNoAvailable(request.getStudentNo(), request.getId());
         int status = request.getStatus() == null ? 1 : request.getStatus();
@@ -424,6 +430,7 @@ public class SchoolExamService {
                 attempt.put("lossRate", analysis.get("lossRate"));
                 attempt.put("aiSummary", analysis.get("aiSummary"));
             } else {
+                attempt.put("averageScore", null);
                 attempt.put("scoreRate", null);
                 attempt.put("lossRate", null);
                 attempt.put("aiSummary", null);
@@ -470,7 +477,7 @@ public class SchoolExamService {
         int completedCount = 0;
         for (Map<String, Object> attempt : attempts) {
             Map<String, Object> analysis = buildAnalysis(attempt, false,
-                    "COMPLETED".equals(string(attempt.get("overallStatus"))) ? feedbackRecords : null);
+                    isFinishedAttempt(attempt) ? feedbackRecords : null);
             attempt.put("scoreRate", analysis.get("scoreRate"));
             attempt.put("lossRate", analysis.get("lossRate"));
             attempt.put("aiSummary", analysis.get("aiSummary"));
@@ -479,7 +486,7 @@ public class SchoolExamService {
             teacherNotes.addAll(jdbc.queryForList("SELECT knowledge_point AS knowledgePoint,teacher_note AS teacherNote "
                     + "FROM school_answer_record WHERE process_id=? AND teacher_note IS NOT NULL AND teacher_note<>''",
                     attempt.get("processId")));
-            if (!"COMPLETED".equals(string(attempt.get("overallStatus")))) {
+            if (!isFinishedAttempt(attempt)) {
                 continue;
             }
             completedCount++;
@@ -507,6 +514,10 @@ public class SchoolExamService {
         response.put("aiSummary", createInsight("班级考试", scoreRate, pointRows,
                 pointRows.stream().mapToInt(point -> integer(point.get("rounds"))).sum(), feedbackRecords, teacherNotes));
         return response;
+    }
+
+    private boolean isFinishedAttempt(Map<String, Object> attempt) {
+        return List.of("COMPLETED", "REJECTED").contains(string(attempt.get("overallStatus")));
     }
 
     public Map<String, Object> adminAttemptDetails(Long processId) {
@@ -928,7 +939,7 @@ public class SchoolExamService {
     }
 
     private Map<String, Object> requireStudentByUser(Long userId) {
-        Map<String, Object> value = singleOrNull("SELECT s.id,s.student_no AS studentNo,s.full_name AS fullName,s.class_id AS classId,s.status,c.major_name AS majorName,c.class_name AS className,c.class_code AS classCode FROM school_student s JOIN school_class c ON c.id=s.class_id WHERE s.user_id=?", userId);
+        Map<String, Object> value = singleOrNull("SELECT s.id,s.student_no AS studentNo,s.full_name AS fullName,s.class_id AS classId,s.status,c.major_name AS majorName,c.class_name AS className,c.class_code AS classCode FROM school_student s JOIN school_class c ON c.id=s.class_id WHERE s.user_id=? AND c.status=1", userId);
         if (value == null || integer(value.get("status")) != 1) throw new BusinessException("当前账户未绑定有效学生档案，请先完成学生登记");
         return value;
     }
@@ -1022,6 +1033,12 @@ public class SchoolExamService {
     private static String normalized(String value) {
         if (value == null || value.trim().isEmpty()) throw new BusinessException("必填内容不能为空");
         return value.trim();
+    }
+
+    private static void requireMaxLength(String value, int maximum, String label) {
+        if (value != null && value.length() > maximum) {
+            throw new BusinessException(label + "不能超过" + maximum + "个字符");
+        }
     }
 
     private static String blankToNull(String value) { return value == null || value.trim().isEmpty() ? null : value.trim(); }

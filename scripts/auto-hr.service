@@ -2,7 +2,7 @@
 Description=Auto HR System
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=/opt/auto-hr/.env
+ConditionPathExists=/opt/auto-hr/config/.env
 
 [Service]
 Type=simple
@@ -10,7 +10,10 @@ User=autohr
 Group=autohr
 UMask=0077
 WorkingDirectory=/opt/auto-hr
-EnvironmentFile=/opt/auto-hr/.env
+EnvironmentFile=/opt/auto-hr/config/.env
+Environment=AUTOHR_ENV_PATH=/opt/auto-hr/config/.env
+Environment=SITE_SETTINGS_PATH=/opt/auto-hr/config/.site-settings.json
+Environment=SITE_CONTENT_PATH=/opt/auto-hr/config/.site-content.json
 Environment=SPRING_PROFILES_ACTIVE=prod
 Environment=SERVER_ADDRESS=127.0.0.1
 Environment=SERVER_PORT=8081

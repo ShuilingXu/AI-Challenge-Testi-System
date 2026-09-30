@@ -19,13 +19,17 @@ public final class EnvironmentFileBootstrap {
     }
 
     public static Path ensureDefaultEnvFile() {
-        return ensureEnvFile(locateProjectRoot());
+        return ensureEnvFile(locateProjectRoot(), defaultEnvPath());
     }
 
     static Path ensureEnvFile(Path projectRoot) {
-        Path envPath = projectRoot.resolve(".env");
+        return ensureEnvFile(projectRoot, projectRoot.resolve(".env"));
+    }
+
+    static Path ensureEnvFile(Path projectRoot, Path envPath) {
         try {
             if (!Files.exists(envPath)) {
+                Files.createDirectories(envPath.toAbsolutePath().getParent());
                 Path template = projectRoot.resolve(".env.example");
                 String content = Files.exists(template)
                         ? Files.readString(template, StandardCharsets.UTF_8)
@@ -40,6 +44,8 @@ public final class EnvironmentFileBootstrap {
     }
 
     public static Path defaultEnvPath() {
+        String configuredPath = System.getenv("AUTOHR_ENV_PATH");
+        if (configuredPath != null && !configuredPath.isBlank()) return Path.of(configuredPath);
         return locateProjectRoot().resolve(".env");
     }
 

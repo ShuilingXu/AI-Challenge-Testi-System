@@ -147,6 +147,36 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void oversizedImportRowsAreRejectedBeforeWritingAndValidRowsStillImport() throws Exception {
+        Map<String, Object> classes = service.importClasses(excelFile("classes.xlsx", workbook -> {
+            var sheet = workbook.createSheet("classes");
+            sheet.createRow(0).createCell(0).setCellValue("Major");
+            for (int i = 1; i <= 2; i++) {
+                var row = sheet.createRow(i);
+                row.createCell(0).setCellValue(i == 1 ? "M".repeat(129) : "Major");
+                row.createCell(1).setCellValue("Class");
+                row.createCell(2).setCellValue("CLASS-" + i);
+            }
+        }));
+        assertEquals(1, classes.get("failureCount"));
+        assertEquals(1, classes.get("successCount"));
+        Map<String, Object> students = service.importStudents(excelFile("students.xlsx", workbook -> {
+            var sheet = workbook.createSheet("students");
+            sheet.createRow(0).createCell(0).setCellValue("Student No");
+            for (int i = 1; i <= 2; i++) {
+                var row = sheet.createRow(i);
+                row.createCell(0).setCellValue("student" + i);
+                row.createCell(1).setCellValue(i == 1 ? "N".repeat(65) : "Student");
+                row.createCell(2).setCellValue("CLASS-2");
+            }
+        }));
+        assertEquals(1, students.get("failureCount"));
+        assertEquals(1, students.get("successCount"));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_class", Integer.class));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_student", Integer.class));
+    }
+
+    @Test
     void rejectsNonXlsxImportsBeforeOpeningTheWorkbook() {
         MockMultipartFile file = new MockMultipartFile("file", "classes.csv", "text/csv", "major,class".getBytes());
 
@@ -395,6 +425,43 @@ class SchoolExamServiceTest {
         assertEquals(80, attempts.get(0).get("scoreRate"));
         assertNull(jdbc.queryForObject("SELECT score_rate FROM school_exam_attempt WHERE process_id=?", Integer.class, 41L));
         assertNull(jdbc.queryForObject("SELECT submitted_at FROM school_exam_attempt WHERE process_id=?", String.class, 41L));
+    }
+
+    @Test
+    void hiddenScoresAreNotReturnedInStudentHistoryForLiveOrFinishedAttempts() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam SET show_live_score=0,show_final_score=0 WHERE id=31");
+        jdbc.update("UPDATE school_exam_process SET ai_average_score=83 WHERE id=41");
+        for (String status : List.of("COMPLETED", "REJECTED", "IN_PROGRESS")) {
+            jdbc.update("UPDATE school_exam_process SET overall_status=? WHERE id=41", status);
+            Map<String, Object> attempt = service.listStudentAttempts(88L).get(0);
+            assertNull(attempt.get("averageScore"));
+            assertNull(attempt.get("scoreRate"));
+            assertNull(attempt.get("lossRate"));
+            assertNull(attempt.get("aiSummary"));
+            assertThrows(BusinessException.class, () -> service.studentAttemptAnalysis(41L, 88L));
+        }
+    }
+
+    @Test
+    void classAnalyticsIncludesFinishedFailingAttempts() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam_process SET overall_status='REJECTED',stage_status='REJECTED' WHERE id=41");
+        jdbc.update("INSERT INTO school_answer_record(process_id,knowledge_point,question_content,answer_status,average_score,sequence_no) "
+                + "VALUES(41,'Java','Question','COMPLETED',40,1)");
+        Map<String, Object> analytics = service.analytics(31L, 1L);
+        assertEquals(1, analytics.get("completedStudentCount"));
+        assertEquals(40, analytics.get("scoreRate"));
+        assertEquals(60, analytics.get("lossRate"));
+        assertEquals(40, rows(analytics.get("knowledgePoints")).get(0).get("scoreRate"));
+    }
+
+    @Test
+    void disabledClassBlocksAnExistingStudentSession() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_class SET status=0 WHERE id=1");
+        assertThrows(BusinessException.class, () -> service.listStudentExams(88L));
+        assertThrows(BusinessException.class, () -> service.startExam(31L, 88L));
     }
 
     @Test

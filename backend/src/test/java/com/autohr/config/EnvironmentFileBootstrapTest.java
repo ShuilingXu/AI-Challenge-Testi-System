@@ -43,4 +43,15 @@ class EnvironmentFileBootstrapTest {
         assertTrue(content.contains("JWT_SECRET=existing-secret"));
         assertTrue(content.contains("SCHOOL_LLM_MODEL=current-model"));
     }
+
+    @Test
+    void createsAndPreservesAnEnvironmentFileInTheWritableConfigDirectory() throws Exception {
+        Path configured = tempDirectory.resolve("config/.env");
+        EnvironmentFileBootstrap.ensureEnvFile(tempDirectory, configured);
+        String original = Files.readString(configured);
+        assertTrue(original.contains("JWT_SECRET="));
+        assertFalse(Files.exists(tempDirectory.resolve(".env")));
+        EnvironmentFileBootstrap.ensureEnvFile(tempDirectory, configured);
+        assertEquals(original, Files.readString(configured));
+    }
 }

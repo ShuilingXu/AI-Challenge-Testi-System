@@ -8,6 +8,7 @@ fi
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR=/opt/auto-hr
+CONFIG_DIR="$INSTALL_DIR/config"
 SERVICE_FILE=/etc/systemd/system/auto-hr.service
 SERVICE_USER=autohr
 SERVICE_GROUP=autohr
@@ -48,6 +49,8 @@ if [ -n "$ENV_SOURCE" ]; then
     echo "Environment file is missing or empty: $ENV_SOURCE" >&2
     exit 1
   fi
+elif [ -s "$CONFIG_DIR/.env" ]; then
+  ENV_SOURCE="$CONFIG_DIR/.env"
 elif [ -s "$INSTALL_DIR/.env" ]; then
   ENV_SOURCE="$INSTALL_DIR/.env"
 elif [ -s "$SOURCE_DIR/.env" ]; then
@@ -68,7 +71,7 @@ fi
 
 install -d -o root -g "$SERVICE_GROUP" -m 0750 "$INSTALL_DIR" "$INSTALL_DIR/backend"
 install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0700 \
-  "$INSTALL_DIR/uploads" "$INSTALL_DIR/logs"
+  "$INSTALL_DIR/uploads" "$INSTALL_DIR/logs" "$CONFIG_DIR"
 install -d -o root -g root -m 0755 "$INSTALL_DIR/frontend"
 
 # Stage the JAR before stopping the current unit so validation failures do not
@@ -80,7 +83,12 @@ systemctl stop auto-hr 2>/dev/null || true
 mv -f "$INSTALL_DIR/backend/auto-hr.jar.next" "$INSTALL_DIR/backend/auto-hr.jar"
 install_owned_file "$SOURCE_DIR/start.sh" "$INSTALL_DIR/start.sh" root "$SERVICE_GROUP" 0750
 
-install_owned_file "$ENV_SOURCE" "$INSTALL_DIR/.env" "$SERVICE_USER" "$SERVICE_GROUP" 0600
+install_owned_file "$ENV_SOURCE" "$CONFIG_DIR/.env" "$SERVICE_USER" "$SERVICE_GROUP" 0600
+for settings_name in .site-settings.json .site-content.json; do
+  if [ ! -e "$CONFIG_DIR/$settings_name" ] && [ -f "$INSTALL_DIR/$settings_name" ]; then
+    install_owned_file "$INSTALL_DIR/$settings_name" "$CONFIG_DIR/$settings_name" "$SERVICE_USER" "$SERVICE_GROUP" 0600
+  fi
+done
 install_owned_file "$SOURCE_DIR/auto-hr.service" "$INSTALL_DIR/auto-hr.service" root root 0644
 install -o root -g root -m 0644 "$SOURCE_DIR/auto-hr.service" "$SERVICE_FILE"
 if [ -f "$SOURCE_DIR/.env.example" ]; then

@@ -19,6 +19,10 @@ public class AuthRateLimitService {
     private final int captchaPerIp;
     private final int verificationPerIp;
     private final int verificationPerTarget;
+    @Value("${auth.security.rate-limit.student-entry-per-ip:600}")
+    private int studentEntryPerIp;
+    @Value("${auth.security.rate-limit.student-entry-per-student:10}")
+    private int studentEntryPerStudent;
 
     public AuthRateLimitService(AuthRedisSecurityStore securityStore,
                                 @Value("${auth.security.trust-forwarded-headers:false}") boolean trustForwardedHeaders,
@@ -41,6 +45,15 @@ public class AuthRateLimitService {
     public void checkCaptchaIssue(HttpServletRequest request) {
         securityStore.enforceRateLimit("captcha-ip", clientAddress(request), captchaPerIp, windowSeconds,
                 "图形验证码请求过于频繁，请稍后重试");
+    }
+
+    public void checkStudentEntry(HttpServletRequest request, String studentNo) {
+        // A whole class may share one public IP. Keep the IP budget separate
+        // from the tighter per-student budget so ordinary class entry works.
+        securityStore.enforceRateLimit("student-entry-ip", clientAddress(request), studentEntryPerIp, windowSeconds,
+                "学生登记请求过于频繁，请稍后重试");
+        securityStore.enforceRateLimit("student-entry-student", studentNo.trim(), studentEntryPerStudent, windowSeconds,
+                "该学号登记尝试过于频繁，请稍后重试");
     }
 
     public void checkLogin(HttpServletRequest request, String username) {

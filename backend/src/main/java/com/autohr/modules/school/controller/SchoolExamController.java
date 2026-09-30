@@ -4,6 +4,7 @@ import com.autohr.common.api.ApiResponse;
 import com.autohr.modules.auth.config.AuthCookieService;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.service.AuthService;
+import com.autohr.modules.auth.service.AuthRateLimitService;
 import com.autohr.modules.school.dto.SchoolClassSaveRequest;
 import com.autohr.modules.school.dto.SchoolExamSaveRequest;
 import com.autohr.modules.school.dto.SchoolStudentSaveRequest;
@@ -13,6 +14,7 @@ import com.autohr.modules.school.service.SchoolExamRecordingService;
 import com.autohr.modules.school.dto.ScoreReviewRequest;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,6 +42,7 @@ public class SchoolExamController {
     private final SchoolExamRecordingService schoolExamRecordingService;
     private final AuthService authService;
     private final AuthCookieService authCookieService;
+    private final AuthRateLimitService authRateLimitService;
 
     @GetMapping("/classes")
     public ApiResponse<List<Map<String, Object>>> classes() {
@@ -48,13 +51,15 @@ public class SchoolExamController {
 
     @PostMapping("/student-registration")
     public ApiResponse<Map<String, Object>> studentRegistration(@Valid @RequestBody StudentRegistrationRequest request,
+                                                                  HttpServletRequest httpRequest,
                                                                   HttpServletResponse response) {
+        authRateLimitService.checkStudentEntry(httpRequest, request.getStudentNo());
         Map<String, Object> result = schoolExamService.registerStudent(request);
         Object token = result.get("token");
         if (token instanceof String value && !value.isBlank()) {
             authCookieService.write(response, value);
         }
-        return ApiResponse.success(result);
+        return ApiResponse.success(Map.of("user", result.get("user")));
     }
 
     @GetMapping("/admin/classes")

@@ -41,6 +41,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, SpaController.ROUTES).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/index.html", "/assets/**", "/favicon.svg").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/captcha").permitAll()
                         .requestMatchers("/api/exams/classes", "/api/exams/student-registration").permitAll()
                         .requestMatchers("/api/exams/admin/**").hasAnyAuthority("ROLE_IT_ADMIN", "ROLE_HR_ADMIN", "ROLE_HR_USER", "ROLE_SYSTEM_ADMIN", "ROLE_DEPARTMENT_HEAD", "ROLE_LECTURER", "IT_ADMIN", "HR_ADMIN", "HR_USER", "SYSTEM_ADMIN", "DEPARTMENT_HEAD", "LECTURER")

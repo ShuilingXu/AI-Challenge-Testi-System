@@ -21,7 +21,7 @@ school:
 spring:
   config:
     import:
-      - optional:file:.env[.properties]
+      - optional:file:${AUTOHR_ENV_PATH:.env}[.properties]
       - optional:file:../.env[.properties]
   application:
     name: auto-hr-system
@@ -80,6 +80,8 @@ auth:
       window-seconds: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:60}
       login-per-ip: ${AUTH_LOGIN_RATE_LIMIT_PER_IP:10}
       login-per-username: ${AUTH_LOGIN_RATE_LIMIT_PER_USERNAME:10}
+      student-entry-per-ip: ${AUTH_STUDENT_ENTRY_RATE_LIMIT_PER_IP:600}
+      student-entry-per-student: ${AUTH_STUDENT_ENTRY_RATE_LIMIT_PER_STUDENT:10}
       captcha-per-ip: ${AUTH_CAPTCHA_RATE_LIMIT_PER_IP:30}
       verification-per-ip: ${AUTH_VERIFICATION_RATE_LIMIT_PER_IP:5}
       verification-per-target: ${AUTH_VERIFICATION_RATE_LIMIT_PER_TARGET:3}

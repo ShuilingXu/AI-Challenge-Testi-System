@@ -68,7 +68,7 @@ SCHOOL_LLM_API_KEY=your-api-key
 
 The provider must expose an OpenAI-compatible `/chat/completions` endpoint. The school LLM configuration is used for question generation, answer evaluation, student summaries, and class summaries. When legacy LLM records are absent, the school configuration is used as the execution fallback.
 
-For production, configure Redis as well. CAPTCHA issuance, login verification, and rate limiting require it.
+Configure Redis for teacher login and student entry. CAPTCHA issuance, login verification, and student entry rate limiting require it. The student entry defaults allow 600 attempts per shared IP and 10 attempts per student number per 60 seconds; adjust `AUTH_STUDENT_ENTRY_RATE_LIMIT_PER_IP` for larger shared school networks.
 
 ```dotenv
 REDIS_HOST=127.0.0.1
@@ -111,7 +111,7 @@ The backend runs on `http://localhost:8081` and the Vite frontend runs on `http:
 
 On startup, the migration runner renames active `recruitment_*` and `interview_*` tables to `school_*` names in place before adding new columns and tables. Existing rows and IDs remain in their original tables. If both an old and a new name exist, startup stops for manual reconciliation instead of overwriting either table. Retired HR tables with historical rows are left untouched. Back up a production database before upgrading.
 
-Default bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`, each initially using `123456`. They must change the initial password unless explicitly exempted through deployment configuration.
+Bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`. In development they initially use `123456` and must change it unless explicitly exempted. Under the `prod` profile, each new account receives a unique random password printed once in the protected backend startup log and must change it after login. Existing built-in accounts still using `123456` are also rotated and their sessions revoked; accounts with a changed password retain it. Operators can retrieve the one-time passwords from `journalctl -u auto-hr` and must keep service logs private.
 
 ## Key API Areas
 
@@ -124,6 +124,8 @@ Default bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`,
 | Student question and answer execution | `/api/interview/interviewee/**` |
 
 All state-changing API calls use the `AUTOHR_CSRF` double-submit token. Authentication is JWT-backed and carried by a secure session cookie in production.
+
+The executable release also serves the embedded frontend and its browser history routes. The systemd installer stores writable configuration in `/opt/auto-hr/config/` (mode `0700`), while executable files remain owned by root. `AUTOHR_ENV_PATH` selects the configuration file for both Spring startup and backend edits; local development still defaults to the project `.env`. Installing this release over an older installation migrates its `.env` and existing default site settings into this configuration directory without moving the database or recordings.
 
 ## Verification
 

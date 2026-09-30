@@ -1,11 +1,13 @@
 package com.autohr.modules.school.controller;
 
 import com.autohr.config.SecurityConfig;
+import com.autohr.config.SpaController;
 import com.autohr.modules.auth.config.AuthCookieService;
 import com.autohr.modules.auth.config.JwtAuthenticationFilter;
 import com.autohr.modules.auth.config.PasswordChangeRequiredFilter;
 import com.autohr.modules.auth.dto.SessionUserVO;
 import com.autohr.modules.auth.service.AuthService;
+import com.autohr.modules.auth.service.AuthRateLimitService;
 import com.autohr.modules.school.service.SchoolExamService;
 import com.autohr.modules.school.service.SchoolExamRecordingService;
 import jakarta.servlet.FilterChain;
@@ -30,13 +32,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import com.autohr.common.exception.BusinessException;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 
-@WebMvcTest(SchoolExamController.class)
+@WebMvcTest({SchoolExamController.class, SpaController.class})
 @Import(SecurityConfig.class)
 class SchoolExamControllerSecurityTest {
 
@@ -54,6 +60,9 @@ class SchoolExamControllerSecurityTest {
 
     @MockBean
     AuthCookieService authCookieService;
+
+    @MockBean
+    AuthRateLimitService authRateLimitService;
 
     @MockBean
     JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -84,6 +93,17 @@ class SchoolExamControllerSecurityTest {
                         .cookie(new Cookie("AUTOHR_CSRF", "test-csrf-token"))
                         .header("X-CSRF-Token", "test-csrf-token"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void embeddedFrontendAllowsEntryAndHistoryRoutesWithoutOpeningPrivateApis() throws Exception {
+        org.junit.jupiter.api.Assertions.assertArrayEquals(SpaController.ROUTES,
+                SpaController.class.getMethod("frontend").getAnnotation(org.springframework.web.bind.annotation.GetMapping.class).value());
+        for (String path : List.of("/", "/login", "/student/register", "/admin/exams", "/exam/take/41", "/admin/score-review/41")) {
+            mockMvc.perform(get(path)).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
+        }
+        mockMvc.perform(get("/api/exams/admin/exams")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/hr/dashboard")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -131,9 +151,25 @@ class SchoolExamControllerSecurityTest {
                         .cookie(new Cookie("AUTOHR_CSRF", "test-csrf-token"))
                         .header("X-CSRF-Token", "test-csrf-token"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").doesNotExist())
                 .andExpect(jsonPath("$.data.user.roleCode").value("STUDENT"));
 
         verify(authCookieService).write(any(), eq("student-session-token"));
+        verify(authRateLimitService).checkStudentEntry(any(), eq("20260001"));
+    }
+
+    @Test
+    void rateLimitedStudentEntryDoesNotAuthenticateOrIssueACookie() throws Exception {
+        doThrow(new BusinessException("该学号登记尝试过于频繁，请稍后重试"))
+                .when(authRateLimitService).checkStudentEntry(any(), eq("20260001"));
+        mockMvc.perform(post("/api/exams/student-registration")
+                        .contentType("application/json")
+                        .content("{\"classId\":1,\"fullName\":\"Student\",\"studentNo\":\"20260001\"}")
+                        .cookie(new Cookie("AUTOHR_CSRF", "test-csrf-token"))
+                        .header("X-CSRF-Token", "test-csrf-token"))
+                .andExpect(status().isBadRequest());
+        verify(schoolExamService, never()).registerStudent(any());
+        verify(authCookieService, never()).write(any(), any());
     }
 
     @Test
