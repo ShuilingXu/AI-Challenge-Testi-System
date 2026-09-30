@@ -481,6 +481,24 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void scoreComparisonKeepsUntouchedQuestionsInBothExamTotals() {
+        seedCompletedAttempt();
+        jdbc.update("INSERT INTO school_answer_record(process_id,knowledge_point,question_content,answer_status,average_score,sequence_no) "
+                + "VALUES(41,'Java','Q1','COMPLETED',20,1)");
+        Long firstRecordId = jdbc.queryForObject("SELECT id FROM school_answer_record WHERE process_id=41 AND sequence_no=1", Long.class);
+        jdbc.update("INSERT INTO school_answer_record(process_id,knowledge_point,question_content,answer_status,average_score,sequence_no) "
+                + "VALUES(41,'Java','Q2','COMPLETED',60,2)");
+        jdbc.update("INSERT INTO school_score_review(record_id,process_id,old_score,new_score,operator_user_id) VALUES(?,?,?,?,?)",
+                firstRecordId, 41L, 80, 20, 88L);
+        SessionUserVO admin = new SessionUserVO(); admin.setId(88L); admin.setRoleCode("IT_ADMIN");
+
+        Map<String, Object> summary = service.searchScores(31L, null, null, null, admin).get(0);
+
+        assertEquals(70, ((Number) summary.get("aiScore")).intValue());
+        assertEquals(40, ((Number) summary.get("reviewedScore")).intValue());
+    }
+
+    @Test
     void assignedTeacherAloneCanSeeAndReviewExamScore() {
         seedCompletedAttempt();
         jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(91,'teacher1','x','LECTURER',1)");
@@ -491,7 +509,10 @@ class SchoolExamServiceTest {
         Long recordId = jdbc.queryForObject("SELECT id FROM school_answer_record WHERE process_id=41", Long.class);
         SessionUserVO assigned = new SessionUserVO(); assigned.setId(91L); assigned.setRoleCode("LECTURER");
         SessionUserVO unassigned = new SessionUserVO(); unassigned.setId(92L); unassigned.setRoleCode("LECTURER");
-        assertEquals(1, service.searchScores(31L, null, "Ada", null, assigned).size());
+        List<Map<String, Object>> initialScores = service.searchScores(31L, null, "Ada", null, assigned);
+        assertEquals(1, initialScores.size());
+        assertEquals(80, ((Number) initialScores.get(0).get("aiScore")).intValue());
+        assertNull(initialScores.get(0).get("reviewedScore"));
         assertTrue(service.searchScores(31L, null, "Ada", null, unassigned).isEmpty());
         assertThrows(BusinessException.class, () -> service.adminAttemptDetails(41L, unassigned));
         ScoreReviewRequest review = new ScoreReviewRequest(); review.setScore(20); review.setNote("复核后发现关键步骤缺失");
@@ -499,6 +520,15 @@ class SchoolExamServiceTest {
         assertEquals(20, jdbc.queryForObject("SELECT average_score FROM school_answer_record WHERE id=?", Integer.class, recordId));
         assertEquals("REJECTED", jdbc.queryForObject("SELECT overall_status FROM school_exam_process WHERE id=41", String.class));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_score_review WHERE record_id=? AND old_score=80 AND new_score=20", Integer.class, recordId));
+        review.setScore(30);
+        service.reviewScore(recordId, review, assigned);
+        Map<String, Object> summary = service.searchScores(31L, null, "Ada", null, assigned).get(0);
+        assertEquals(80, ((Number) summary.get("aiScore")).intValue());
+        assertEquals(30, ((Number) summary.get("reviewedScore")).intValue());
+        Map<String, Object> reviewedRecord = rows(service.adminAttemptDetails(41L, assigned).get("records")).get(0);
+        assertEquals(80, ((Number) reviewedRecord.get("aiScore")).intValue());
+        assertEquals(30, ((Number) reviewedRecord.get("reviewedScore")).intValue());
+        assertEquals("复核后发现关键步骤缺失", reviewedRecord.get("teacherNote"));
     }
 
     @Test

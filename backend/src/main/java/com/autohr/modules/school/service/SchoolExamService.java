@@ -527,11 +527,14 @@ public class SchoolExamService {
                         + "r.sequence_no AS sequenceNo,COALESCE(NULLIF(r.knowledge_point,''),'未分类') AS knowledgePoint, "
                         + "r.question_content AS questionContent,r.question_status AS questionStatus,r.answer_content AS answerContent, "
                         + "r.answer_status AS answerStatus,r.interviewer_score AS interviewerScore,r.scorer_score AS scorerScore, "
-                        + "r.average_score AS averageScore,r.interviewer_comment AS interviewerComment,r.teacher_note AS teacherNote,r.created_at AS createdAt,r.updated_at AS updatedAt "
+                        + "r.average_score AS averageScore,COALESCE((SELECT sr.old_score FROM school_score_review sr WHERE sr.record_id=r.id ORDER BY sr.id LIMIT 1),r.average_score) AS aiScore, "
+                        + "CASE WHEN EXISTS (SELECT 1 FROM school_score_review sr WHERE sr.record_id=r.id) THEN r.average_score END AS reviewedScore, "
+                        + "r.interviewer_comment AS interviewerComment,r.teacher_note AS teacherNote,r.created_at AS createdAt,r.updated_at AS updatedAt "
                         + "FROM school_answer_record r LEFT JOIN school_exam_process_stage ps ON ps.id=r.process_stage_id "
                         + "WHERE r.process_id=? ORDER BY COALESCE(ps.sequence_no,0),r.sequence_no,r.id", processId);
         attempt.put("records", records);
         attempt.put("answeredRounds", records.stream().filter(record -> "COMPLETED".equals(string(record.get("answerStatus")))).count());
+        attempt.putAll(scoreComparison(processId));
         return attempt;
     }
 
@@ -556,8 +559,21 @@ public class SchoolExamService {
         for (Map<String, Object> row : rows) {
             Map<String, Object> score = buildAnalysis(row, false);
             row.put("scoreRate", integer(score.get("answeredRounds")) == 0 ? null : score.get("scoreRate"));
+            row.putAll(scoreComparison(number(row.get("processId"))));
         }
         return rows;
+    }
+
+    private Map<String, Object> scoreComparison(Long processId) {
+        Map<String, Object> aggregate = jdbc.queryForMap("SELECT ROUND(AVG(COALESCE((SELECT sr.old_score FROM school_score_review sr "
+                + "WHERE sr.record_id=r.id ORDER BY sr.id LIMIT 1),r.average_score))) AS aiScore, "
+                + "ROUND(AVG(r.average_score)) AS currentScore, "
+                + "SUM(CASE WHEN EXISTS (SELECT 1 FROM school_score_review sr WHERE sr.record_id=r.id) THEN 1 ELSE 0 END) AS reviewedCount "
+                + "FROM school_answer_record r WHERE r.process_id=? AND r.answer_status='COMPLETED'", processId);
+        Map<String, Object> comparison = new LinkedHashMap<>();
+        comparison.put("aiScore", aggregate.get("aiScore"));
+        comparison.put("reviewedScore", integer(aggregate.get("reviewedCount")) > 0 ? aggregate.get("currentScore") : null);
+        return comparison;
     }
 
     @Transactional

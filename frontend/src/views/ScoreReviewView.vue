@@ -12,16 +12,18 @@
       <el-table v-loading="loading" :data="results" empty-text="暂无符合条件的成绩记录">
         <el-table-column prop="className" label="班级" /><el-table-column prop="examName" label="考试" />
         <el-table-column prop="fullName" label="姓名" /><el-table-column prop="studentNo" label="学号" />
-        <el-table-column label="成绩"><template #default="{ row }">{{ row.averageScore ?? row.scoreRate ?? '-' }}{{ row.averageScore != null || row.scoreRate != null ? ' 分' : '' }}</template></el-table-column>
+        <el-table-column label="AI 给分"><template #default="{ row }">{{ row.aiScore == null ? '待评分' : `${row.aiScore} 分` }}</template></el-table-column>
+        <el-table-column label="人工复核后给分"><template #default="{ row }">{{ row.reviewedScore == null ? '未复核' : `${row.reviewedScore} 分` }}</template></el-table-column>
         <el-table-column label="操作" width="120"><template #default="{ row }"><el-button text type="primary" @click="open(row)">人工改分</el-button></template></el-table-column>
       </el-table>
     </section>
     <section v-if="detail.processId" class="panel">
-      <div class="detail-head"><div><h2>{{ detail.fullName }} · {{ detail.examName }}</h2><p>{{ detail.className }} · {{ detail.studentNo }}</p></div><el-button @click="closeDetail">返回结果</el-button></div>
+      <div class="detail-head"><div><h2>{{ detail.fullName }} · {{ detail.examName }}</h2><p>{{ detail.className }} · {{ detail.studentNo }}</p><p>AI 给分：{{ detail.aiScore == null ? '待评分' : `${detail.aiScore} 分` }}　人工复核后给分：{{ detail.reviewedScore == null ? '未复核' : `${detail.reviewedScore} 分` }}</p></div><el-button @click="closeDetail">返回结果</el-button></div>
       <article v-for="record in detail.records || []" :key="record.id" class="answer">
         <h3>第 {{ record.sequenceNo }} 题 · {{ record.knowledgePoint }}</h3>
         <dl><dt>题目</dt><dd>{{ record.questionContent }}</dd><dt>回答</dt><dd>{{ record.answerContent || '尚未作答' }}</dd><dt>AI 判分评语</dt><dd>{{ record.interviewerComment || '暂无评语' }}</dd></dl>
-        <div class="score-line"><strong>当前得分：{{ record.averageScore ?? '-' }} 分</strong><span v-if="record.teacherNote">教师注释：{{ record.teacherNote }}</span></div>
+        <div class="score-line"><strong>AI 给分：{{ record.aiScore == null ? '待评分' : `${record.aiScore} 分` }}</strong><strong>人工复核后给分：{{ record.reviewedScore == null ? '未复核' : `${record.reviewedScore} 分` }}</strong></div>
+        <div v-if="record.reviewedScore != null" class="review-note"><strong>复核注释</strong><p>{{ record.teacherNote || '本次复核未填写注释' }}</p></div>
         <div v-if="record.answerStatus === 'COMPLETED'" class="review-controls">
           <el-input-number v-model="drafts[record.id].score" :min="0" :max="100" aria-label="复核得分" />
           <el-input v-model="drafts[record.id].note" maxlength="2000" show-word-limit placeholder="教师注释（可选，仅教职工可见）" />
@@ -70,5 +72,5 @@ watch(() => route.params.processId, loadDetail)
 </script>
 
 <style scoped>
-.review-page{max-width:1280px;margin:auto;padding:28px}.review-page header{margin-bottom:24px}.review-page h1{margin:0 0 6px}.review-page p{color:var(--text-muted)}.panel{padding:22px;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.filters,.detail-head,.score-line,.review-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.filters{margin-bottom:18px}.filters .el-input,.filters .el-select{width:180px}.detail-head{justify-content:space-between}.detail-head h2{margin:0}.answer{padding:18px 0;border-top:1px solid var(--border)}.answer h3{margin:0 0 12px}.answer dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;margin:0 0 16px}.answer dt{color:var(--text-muted)}.answer dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.score-line{margin-bottom:12px}.review-controls .el-input{flex:1;min-width:220px}@media(max-width:700px){.review-page{padding:16px}.filters .el-input,.filters .el-select{width:100%}.answer dl{grid-template-columns:1fr}}
+.review-page{max-width:1280px;margin:auto;padding:28px}.review-page header{margin-bottom:24px}.review-page h1{margin:0 0 6px}.review-page p{color:var(--text-muted)}.panel{padding:22px;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.filters,.detail-head,.score-line,.review-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.filters{margin-bottom:18px}.filters .el-input,.filters .el-select{width:180px}.detail-head{justify-content:space-between}.detail-head h2{margin:0}.answer{padding:18px 0;border-top:1px solid var(--border)}.answer h3{margin:0 0 12px}.answer dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;margin:0 0 16px}.answer dt{color:var(--text-muted)}.answer dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.score-line{margin-bottom:12px}.review-note{margin:0 0 16px;padding:12px 14px;background:var(--primary-soft);border-radius:var(--radius-sm)}.review-note strong{font-size:13px}.review-note p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.review-controls .el-input{flex:1;min-width:220px}@media(max-width:700px){.review-page{padding:16px}.filters .el-input,.filters .el-select{width:100%}.answer dl{grid-template-columns:1fr}}
 </style>
