@@ -7,6 +7,8 @@ import lombok.Data;
 @Data
 public class SchoolClassSaveRequest {
     private Long id;
+    @Size(max = 100)
+    private java.util.List<Long> teacherIds;
 
     @NotBlank(message = "专业不能为空")
     @Size(max = 128)

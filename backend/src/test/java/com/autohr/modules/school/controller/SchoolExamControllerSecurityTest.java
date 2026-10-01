@@ -109,7 +109,9 @@ class SchoolExamControllerSecurityTest {
     @Test
     @WithMockUser(authorities = "ROLE_HR_USER")
     void authorizedAdministratorsCanForwardStudentImportFiles() throws Exception {
-        when(schoolExamService.importStudents(any())).thenReturn(Map.of("successCount", 1, "failureCount", 0, "rows", List.of()));
+        SessionUserVO actor = new SessionUserVO(); actor.setId(91L); actor.setRoleCode("HR_ADMIN");
+        when(authService.loadUserByUsername("user")).thenReturn(actor);
+        when(schoolExamService.importStudents(any(), eq(actor))).thenReturn(Map.of("successCount", 1, "failureCount", 0, "rows", List.of()));
 
         mockMvc.perform(multipart("/api/exams/admin/students/import")
                         .file(new MockMultipartFile("file", "students.xlsx",
@@ -119,7 +121,7 @@ class SchoolExamControllerSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.successCount").value(1));
 
-        verify(schoolExamService).importStudents(any());
+        verify(schoolExamService).importStudents(any(), eq(actor));
     }
 
     @Test
@@ -137,6 +139,32 @@ class SchoolExamControllerSecurityTest {
                 .andExpect(jsonPath("$.data.processId").value(41));
 
         verify(schoolExamService).startExam(31L, 88L);
+    }
+
+    @Test
+    @WithMockUser(username = "teacher", authorities = "ROLE_LECTURER")
+    void rosterEndpointsPassTheAuthenticatedTeacherToScopeChecks() throws Exception {
+        var teacher = new SessionUserVO(); teacher.setId(91L); teacher.setRoleCode("LECTURER");
+        when(authService.loadUserByUsername("teacher")).thenReturn(teacher);
+        when(schoolExamService.listClasses(null, teacher)).thenReturn(List.of());
+        when(schoolExamService.listStudents(1L, "Ada", teacher)).thenReturn(List.of());
+        mockMvc.perform(get("/api/exams/admin/classes")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/exams/admin/students").param("classId", "1").param("keyword", "Ada")).andExpect(status().isOk());
+        verify(schoolExamService).listClasses(null, teacher);
+        verify(schoolExamService).listStudents(1L, "Ada", teacher);
+        doThrow(new BusinessException("仅管理员可维护班级或删除名册")).when(schoolExamService).deleteStudent(9L, teacher);
+        mockMvc.perform(post("/api/exams/admin/students/9/delete")
+                .cookie(new Cookie("AUTOHR_CSRF", "test-csrf-token"))
+                .header("X-CSRF-Token", "test-csrf-token")).andExpect(status().isBadRequest());
+        verify(schoolExamService).deleteStudent(9L, teacher);
+        verify(schoolExamService, never()).deleteStudent(9L);
+    }
+
+    @Test
+    @WithMockUser(username = "teacher", authorities = "ROLE_LECTURER")
+    void rosterMutationWithoutCsrfTokenNeverReachesService() throws Exception {
+        mockMvc.perform(post("/api/exams/admin/students/9/delete")).andExpect(status().isForbidden());
+        verify(schoolExamService, never()).deleteStudent(any(), any());
     }
 
     @Test

@@ -30,6 +30,8 @@ class DatabaseMigrationRunnerTest {
                 new ActiveDatabase(DatabaseType.SQLITE, url, "", "", false), new AppMigrationProperties());
         runner.run();
         runner.run();
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='school_class_teacher'", Integer.class));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_school_class_teacher_user'", Integer.class));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM school_assessment_config WHERE id=1 AND job_code='EX1'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='recruitment_job'", Integer.class));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM hr_employee WHERE id=7 AND job_id=1", Integer.class));

@@ -250,7 +250,9 @@ public class InterviewServiceImpl implements InterviewService {
     private static final Pattern KNOWLEDGE_PROMPT_INJECTION_PATTERN = Pattern.compile(
             "(?is)(ignore\\s+(all\\s+)?(previous|prior|above)\\s+(instructions?|prompts?)"
                     + "|system\\s+prompt|developer\\s+message|you\\s+are\\s+now|act\\s+as"
-                    + "|忽略.{0,12}(之前|以上|前述).{0,12}(指令|提示|规则)|系统提示词|开发者消息|扮演.{0,12}(角色|助手))");
+                    + "|忽略.{0,12}(之前|以上|前述).{0,12}(指令|提示|规则)|系统提示词|开发者消息|扮演.{0,12}(角色|助手)"
+                    + "|给.{0,12}(所有|全部|每个).{0,12}(满分|最高分)|无论.{0,20}(回答|答案).{0,20}(满分|100分)"
+                    + "|(give|award|assign).{0,30}(all|every).{0,30}(full\\s+(marks|score)|100))");
 
     private enum AnswerClaimState {
         CLAIMED, PROCESSING, COMPLETED
@@ -344,6 +346,7 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     @Transactional
     public InterviewVO saveKnowledgeItem(KnowledgeItemSaveRequest request) {
+        rejectPromptInjection(request.getKnowledgePoint(), request.getKnowledgeContent(), 0);
         requireKnowledgeBase(request.getKnowledgeBaseId());
         InterviewKnowledgeItem entity = request.getId() == null ? new InterviewKnowledgeItem() : requireKnowledgeItem(request.getId());
         BeanUtils.copyProperties(request, entity);
@@ -520,7 +523,7 @@ public class InterviewServiceImpl implements InterviewService {
 
     private void rejectPromptInjection(String point, String content, long rowNumber) {
         if (KNOWLEDGE_PROMPT_INJECTION_PATTERN.matcher(point + "\n" + content).find()) {
-            throw new BusinessException("CSV第" + rowNumber + "行包含疑似提示注入指令，请移除后重试");
+            throw new BusinessException((rowNumber > 0 ? "导入第" + rowNumber + "行" : "知识库内容") + "包含疑似提示注入指令，请移除后重试");
         }
     }
 
@@ -837,6 +840,7 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     public InterviewVO getNextAiQuestion(Long processId) {
         InterviewProcess process = requireProcess(processId);
+        requireOpenSchoolExam(process, false);
         if (isTemplateProcess(process)) {
             return getTemplateNextAiQuestion(process);
         }
@@ -888,7 +892,14 @@ public class InterviewServiceImpl implements InterviewService {
             log.warn("AI answer evaluation failed [{}] for record {}", errorId, claim.recordId(), ex);
             throw new BusinessException("AI评分失败，请使用相同回答重试（错误编号：" + errorId + "）");
         }
-        return completeAiAnswer(claim, interviewerEvaluation);
+        try {
+            return completeAiAnswer(claim, interviewerEvaluation);
+        } catch (BusinessException ex) {
+            // The grading transaction rolls back if the window closed during
+            // the LLM call. Retain the submitted answer without a formal score.
+            transactionTemplate.executeWithoutResult(status -> aiRecordMapper.failAnswer(claim.recordId(), claim.token(), "GRADE_NOT_COMMITTED"));
+            throw ex;
+        }
     }
 
     @Override
@@ -932,6 +943,7 @@ public class InterviewServiceImpl implements InterviewService {
     private AnswerClaim claimAiAnswer(AiAnswerRequest request) {
         AnswerClaim claim = transactionTemplate.execute(status -> {
             InterviewProcess process = requireProcess(request.getProcessId());
+            requireOpenSchoolExam(process, true);
             InterviewAiRecord record = requireRequestedAiRecord(process, request);
             if (isCompletedAiAnswer(record)) {
                 if (StrUtil.equals(record.getAnswerContent(), request.getAnswerContent())) {
@@ -1012,7 +1024,21 @@ public class InterviewServiceImpl implements InterviewService {
         value.setInterviewerScore(null);
         value.setScorerScore(null);
         value.setInterviewerComment(null);
+        value.setReviewerComment(null);
+        value.setAiThresholdScore(null);
+        value.setAiFollowUpThreshold(null);
+        value.setProcessStatusView(finished ? "答题已提交" : "答题中");
+        if (finished) {
+            value.setOverallStatus("COMPLETED");
+            value.setStageStatus("COMPLETED");
+        }
         return value;
+    }
+
+    private void requireOpenSchoolExam(InterviewProcess process, boolean lockExam) {
+        if ("SCHOOL_EXAM".equals(process.getAiOutputMode()) || isSchoolExamProcess(process)) {
+            com.autohr.modules.school.service.ExamWindowGuard.requireOpen(schoolScoreJdbc, process.getId(), lockExam);
+        }
     }
 
     private InterviewAiRecord requireRequestedAiRecord(InterviewProcess process, AiAnswerRequest request) {
@@ -1047,6 +1073,7 @@ public class InterviewServiceImpl implements InterviewService {
         InterviewVO result = transactionTemplate.execute(status -> {
             InterviewAiRecord record = requireAiRecord(claim.recordId());
             InterviewProcess process = requireProcess(record.getProcessId());
+            requireOpenSchoolExam(process, true);
             int averageScore = interviewerEvaluation.score();
             String interviewerComment = abbreviate(interviewerEvaluation.comment(), MAX_INTERVIEWER_COMMENT_LENGTH);
             // Legacy score columns mirror the single evaluation for schema/API compatibility.

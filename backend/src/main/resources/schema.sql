@@ -349,6 +349,15 @@ CREATE TABLE IF NOT EXISTS school_class (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS school_class_teacher (
+    class_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY (class_id, user_id),
+    FOREIGN KEY (class_id) REFERENCES school_class(id),
+    FOREIGN KEY (user_id) REFERENCES sys_user(id)
+);
+CREATE INDEX IF NOT EXISTS idx_school_class_teacher_user ON school_class_teacher(user_id);
+
 CREATE TABLE IF NOT EXISTS school_student (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_no VARCHAR(64) NOT NULL UNIQUE,

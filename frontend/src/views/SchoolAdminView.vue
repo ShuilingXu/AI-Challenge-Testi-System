@@ -8,11 +8,12 @@
       </header>
 
       <section v-if="mode === 'classes'" class="two-column">
-        <el-form class="tool-panel" label-position="top" :model="classForm">
+        <el-form v-if="canManageExamAccess" class="tool-panel" label-position="top" :model="classForm">
           <h2>{{ classForm.id ? '编辑班级' : '新建班级' }}</h2>
           <el-form-item label="专业"><el-input v-model="classForm.majorName" placeholder="例如：计算机科学与技术" /></el-form-item>
           <el-form-item label="班级名称"><el-input v-model="classForm.className" placeholder="例如：2026 级 1 班" /></el-form-item>
           <el-form-item label="班级代码"><el-input v-model="classForm.classCode" placeholder="例如：CS2601" /></el-form-item>
+          <el-form-item label="授课教师"><el-select v-model="classForm.teacherIds" multiple filterable clearable placeholder="未指派时仅管理员可访问名册"><el-option v-for="item in teachers" :key="item.id" :label="item.displayName || item.username" :value="item.id" /></el-select></el-form-item>
           <el-form-item label="说明"><el-input v-model="classForm.description" type="textarea" :rows="3" /></el-form-item>
           <el-form-item label="状态"><el-switch v-model="classForm.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" /></el-form-item>
           <div class="actions"><el-button type="primary" @click="saveClass">保存班级</el-button><el-button @click="resetClass">清空</el-button></div>
@@ -21,7 +22,7 @@
           <p class="hint">Excel 列顺序：专业、班级名称、班级代码、说明。首行为表头。</p>
         </el-form>
         <section class="list-panel"><div class="panel-head"><h2>班级列表</h2><div class="filters"><el-input v-model="classKeyword" clearable placeholder="搜索专业、班级或代码" @input="loadClasses" /><el-button :loading="classesLoading" @click="loadClasses">刷新</el-button></div></div>
-          <el-table v-loading="classesLoading" :data="classes" height="520" @row-click="editClass"><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column prop="classCode" label="班级代码" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">{{ Number(row.status) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" @click.stop="removeClass(row)">删除</el-button></template></el-table-column></el-table>
+          <el-table v-loading="classesLoading" :data="classes" height="520" @row-click="editClass"><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column prop="classCode" label="班级代码" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">{{ Number(row.status) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" v-if="canManageExamAccess" @click.stop="removeClass(row)">删除</el-button></template></el-table-column></el-table>
         </section>
       </section>
 
@@ -38,7 +39,7 @@
           <p class="hint">Excel 列顺序：学号、姓名、班级代码。请将学号列设置为文本格式。</p>
         </el-form>
         <section class="list-panel"><div class="panel-head"><h2>学生列表</h2><div class="filters"><el-select v-model="studentClassId" clearable placeholder="全部班级" @change="loadStudents"><el-option v-for="item in validClasses" :key="item.id" :label="classLabel(item)" :value="item.id" /></el-select><el-input v-model="studentKeyword" clearable placeholder="姓名或学号" @input="loadStudents" /><el-button :loading="studentsLoading" @click="loadStudents">刷新</el-button></div></div>
-          <el-table v-loading="studentsLoading" :data="students" height="520" @row-click="editStudent"><el-table-column prop="studentNo" label="学号" /><el-table-column prop="fullName" label="姓名" /><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">{{ Number(row.status) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" @click.stop="removeStudent(row)">删除</el-button></template></el-table-column></el-table>
+          <el-table v-loading="studentsLoading" :data="students" height="520" @row-click="editStudent"><el-table-column prop="studentNo" label="学号" /><el-table-column prop="fullName" label="姓名" /><el-table-column prop="majorName" label="专业" /><el-table-column prop="className" label="班级" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">{{ Number(row.status) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button text type="danger" v-if="canManageExamAccess" @click.stop="removeStudent(row)">删除</el-button></template></el-table-column></el-table>
         </section>
       </section>
 
@@ -47,8 +48,8 @@
           <h2>{{ examForm.id ? '编辑考试' : '发布考试' }}</h2>
           <el-form-item label="考试名称"><el-input v-model="examForm.examName" /></el-form-item>
           <el-form-item label="考试代码"><el-input v-model="examForm.examCode" placeholder="例如：JAVA-2026-01" /></el-form-item>
-          <el-form-item label="面向班级"><el-select v-model="examForm.classId" clearable placeholder="不选则全体学生"><el-option v-for="item in validClasses" :key="item.id" :label="classLabel(item)" :value="item.id" /></el-select></el-form-item>
-          <el-form-item v-if="canManageExamAccess" label="负责教师"><el-select v-model="examForm.responsibleTeacherIds" multiple filterable clearable placeholder="不选则所有教职工可见"><el-option v-for="item in teachers" :key="item.id" :label="item.displayName || item.username" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="面向班级"><el-select v-model="examForm.classId" :clearable="canManageExamAccess" :placeholder="canManageExamAccess ? '不选则全体学生' : '请选择授课班级'"><el-option v-for="item in validClasses" :key="item.id" :label="classLabel(item)" :value="item.id" /></el-select></el-form-item>
+          <el-form-item v-if="canManageExamAccess" label="负责教师"><el-select v-model="examForm.responsibleTeacherIds" multiple filterable clearable placeholder="未指派时仅管理员可见"><el-option v-for="item in teachers" :key="item.id" :label="item.displayName || item.username" :value="item.id" /></el-select></el-form-item>
           <el-form-item v-if="canManageExamAccess" label="学生成绩可见性"><el-checkbox v-model="examForm.showLiveScore">考试中显示实时分数</el-checkbox><el-checkbox v-model="examForm.showFinalScore">考试结束后显示最终分数</el-checkbox></el-form-item>
           <el-form-item label="考试防作弊监控"><el-checkbox v-model="examForm.cameraEnabled">启用摄像头</el-checkbox><el-checkbox v-model="examForm.screenRecordingEnabled">启用屏幕录制</el-checkbox><p class="hint">考生需授权所选设备才能开始答题。启用两项时，录像会包含屏幕和摄像头画面。</p></el-form-item>
           <el-form-item label="知识库"><el-select v-model="examForm.knowledgeBaseId" clearable><el-option v-for="item in knowledgeBases" :key="item.id" :label="item.knowledgeBaseName" :value="item.id" /></el-select></el-form-item>
@@ -104,7 +105,7 @@ const loading = ref(false)
 const classesLoading = ref(false); const studentsLoading = ref(false)
 const classes = ref([]); const students = ref([]); const exams = ref([]); const knowledgeBases = ref([]); const templates = ref([])
 const classKeyword = ref(''); const studentKeyword = ref(''); const studentClassId = ref(null)
-const classForm = reactive({ id: null, majorName: '', className: '', classCode: '', description: '', status: 1 })
+const classForm = reactive({ id: null, majorName: '', className: '', classCode: '', description: '', status: 1, teacherIds: [] })
 const studentForm = reactive({ id: null, studentNo: '', fullName: '', classId: null, status: 1 })
 const examForm = reactive({ id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, followUpRounds: 2, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', cameraEnabled: false, screenRecordingEnabled: false, publishStart: '', publishEnd: '', status: 'DRAFT', responsibleTeacherIds: [], showLiveScore: true, showFinalScore: true })
 const analyticsFilter = reactive({ examId: null, classId: null }); const analytics = reactive({ examCount: 0, studentCount: 0, completedStudentCount: 0, scoreRate: 0, lossRate: 0, aiSummary: '', knowledgePoints: [], students: [] })
@@ -118,7 +119,7 @@ function classLabel(item) {
   const code = item?.classCode || item?.class_code || ''
   return [major, name, code].filter(Boolean).join(' / ') || `班级 ${item?.id ?? ''}`
 }
-function resetClass() { Object.assign(classForm, { id: null, majorName: '', className: '', classCode: '', description: '', status: 1 }) }
+function resetClass() { Object.assign(classForm, { id: null, majorName: '', className: '', classCode: '', description: '', status: 1, teacherIds: [] }) }
 function resetStudent() { Object.assign(studentForm, { id: null, studentNo: '', fullName: '', classId: null, status: 1 }) }
 function resetExam() { Object.assign(examForm, { id: null, examName: '', examCode: '', classId: null, knowledgeBaseId: null, processTemplateId: null, instructions: '', questionRounds: 5, followUpRounds: 2, maxQuestionRounds: 7, passingScore: 60, followUpThreshold: 60, antiCheatSwitchLimit: 5, antiCheatAction: 'SUBMIT', cameraEnabled: false, screenRecordingEnabled: false, publishStart: '', publishEnd: '', status: 'DRAFT', responsibleTeacherIds: [], showLiveScore: true, showFinalScore: true }) }
 function editClass(row) { Object.assign(classForm, row) }
@@ -206,7 +207,7 @@ async function continueAttempt(row) {
 async function restartAttempt(row) {
   try { await ElMessageBox.confirm('打回后将清空全部答题和计数，重新抽题，是否确认？', '打回考试', { type: 'warning' }); await schoolApi.restartAttempt(row.processId); ElMessage.success('考试已打回'); await loadAnalytics() } catch (error) { if (error !== 'cancel' && error !== 'close') fail(error) }
 }
-async function loadMode() { await loadClasses(); if (mode.value === 'students') await loadStudents(); if (mode.value === 'exams') { await Promise.all([loadExams(), loadDependencies(), loadTeachers()]) } if (mode.value === 'analytics') { await Promise.all([loadExams(), loadAnalytics()]) } }
+async function loadMode() { await loadClasses(); if (mode.value === 'classes') await loadTeachers(); if (mode.value === 'students') await loadStudents(); if (mode.value === 'exams') { await Promise.all([loadExams(), loadDependencies(), loadTeachers()]) } if (mode.value === 'analytics') { await Promise.all([loadExams(), loadAnalytics()]) } }
 async function loadTeachers() { if (!canManageExamAccess) return; try { teachers.value = (await schoolApi.listAssignableTeachers()).data || [] } catch (error) { fail(error) } }
 onMounted(loadMode); watch(() => route.fullPath, loadMode)
 </script>

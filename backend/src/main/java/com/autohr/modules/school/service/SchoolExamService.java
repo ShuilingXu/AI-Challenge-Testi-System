@@ -104,15 +104,39 @@ public class SchoolExamService {
     }
 
     public List<Map<String, Object>> listClasses(String keyword) {
+        return listClasses(keyword, null);
+    }
+
+    public List<Map<String, Object>> listClasses(String keyword, SessionUserVO actor) {
         String sql = "SELECT id, major_name AS majorName, class_name AS className, class_code AS classCode, "
-                + "description, status, created_at AS createdAt FROM school_class";
+                + "description, status, created_at AS createdAt FROM school_class WHERE 1=1";
         List<Object> args = new ArrayList<>();
         if (keyword != null && !keyword.isBlank()) {
-            sql += " WHERE major_name LIKE ? OR class_name LIKE ? OR class_code LIKE ?";
+            sql += " AND (major_name LIKE ? OR class_name LIKE ? OR class_code LIKE ?)";
             String value = "%" + keyword.trim() + "%";
             args.add(value); args.add(value); args.add(value);
         }
-        return jdbc.queryForList(sql + " ORDER BY major_name, class_name", args.toArray());
+        if (actor != null && !isExamAdministrator(actor)) {
+            sql += " AND EXISTS (SELECT 1 FROM school_class_teacher t WHERE t.class_id=school_class.id AND t.user_id=?)";
+            args.add(actor.getId());
+        }
+        var rows = jdbc.queryForList(sql + " ORDER BY major_name, class_name", args.toArray());
+        for (var row : rows) row.put("teacherIds", jdbc.queryForList("SELECT user_id FROM school_class_teacher WHERE class_id=?", Long.class, row.get("id")));
+        return rows;
+    }
+
+    @Transactional
+    public Map<String, Object> saveClass(SchoolClassSaveRequest request, SessionUserVO actor) {
+        requireRosterAdministrator(actor);
+        var teachers = request.getTeacherIds();
+        if (teachers != null) for (var id : teachers) requireActiveTeacher(id);
+        var saved = saveClass(request);
+        if (teachers != null) {
+            jdbc.update("DELETE FROM school_class_teacher WHERE class_id=?", saved.get("id"));
+            for (var id : teachers.stream().distinct().toList()) jdbc.update("INSERT INTO school_class_teacher(class_id,user_id) VALUES(?,?)", saved.get("id"), id);
+        }
+        auditRoster(actor, "SAVE_CLASS", saved.get("id"));
+        return saved;
     }
 
     @Transactional
@@ -145,6 +169,7 @@ public class SchoolExamService {
         if (studentCount > 0 || examCount > 0) {
             throw new BusinessException("班级已有学生或考试，不能删除，请先移除关联数据或停用班级");
         }
+        jdbc.update("DELETE FROM school_class_teacher WHERE class_id=?", classId);
         if (jdbc.update("DELETE FROM school_class WHERE id=?", classId) != 1) {
             throw new BusinessException("班级删除失败，请刷新后重试");
         }
@@ -192,10 +217,18 @@ public class SchoolExamService {
     }
 
     public List<Map<String, Object>> listStudents(Long classId, String keyword) {
+        return listStudents(classId, keyword, null);
+    }
+
+    public List<Map<String, Object>> listStudents(Long classId, String keyword, SessionUserVO actor) {
         String sql = "SELECT s.id, s.student_no AS studentNo, s.full_name AS fullName, s.class_id AS classId, "
                 + "s.status, s.user_id AS userId, c.major_name AS majorName, c.class_name AS className, c.class_code AS classCode "
                 + "FROM school_student s JOIN school_class c ON c.id=s.class_id WHERE 1=1";
         List<Object> args = new ArrayList<>();
+        if (actor != null && !isExamAdministrator(actor)) {
+            sql += " AND EXISTS (SELECT 1 FROM school_class_teacher t WHERE t.class_id=s.class_id AND t.user_id=?)";
+            args.add(actor.getId());
+        }
         if (classId != null) { sql += " AND s.class_id=?"; args.add(classId); }
         if (keyword != null && !keyword.isBlank()) {
             sql += " AND (s.student_no LIKE ? OR s.full_name LIKE ? OR c.class_name LIKE ?)";
@@ -203,6 +236,50 @@ public class SchoolExamService {
             args.add(value); args.add(value); args.add(value);
         }
         return jdbc.queryForList(sql + " ORDER BY c.major_name,c.class_name,s.student_no", args.toArray());
+    }
+
+    @Transactional
+    public Map<String, Object> saveStudent(SchoolStudentSaveRequest request, SessionUserVO actor) {
+        requireClassAccess(request.getClassId(), actor);
+        if (request.getId() != null) requireClassAccess(number(requireStudent(request.getId()).get("classId")), actor);
+        var saved = saveStudent(request);
+        auditRoster(actor, "SAVE_STUDENT", saved.get("id"));
+        return saved;
+    }
+
+    @Transactional
+    public void deleteStudent(Long id, SessionUserVO actor) {
+        requireRosterAdministrator(actor);
+        deleteStudent(id);
+        auditRoster(actor, "DELETE_STUDENT", id);
+    }
+
+    @Transactional
+    public void deleteClass(Long id, SessionUserVO actor) {
+        requireRosterAdministrator(actor);
+        deleteClass(id);
+        auditRoster(actor, "DELETE_CLASS", id);
+    }
+
+    private void requireRosterAdministrator(SessionUserVO actor) {
+        if (actor == null || !isExamAdministrator(actor)) throw new BusinessException("仅管理员可维护班级或删除名册");
+    }
+
+    private void requireClassAccess(Long classId, SessionUserVO actor) {
+        if (actor == null) throw new BusinessException("缺少操作人");
+        if (isExamAdministrator(actor)) return;
+        if (classId == null || jdbc.queryForObject("SELECT COUNT(*) FROM school_class_teacher WHERE class_id=? AND user_id=?", Integer.class, classId, actor.getId()) == 0)
+            throw new BusinessException("无权访问该班级");
+    }
+
+    private void requireActiveTeacher(Long id) {
+        if (id == null || jdbc.queryForObject("SELECT COUNT(*) FROM sys_user WHERE id=? AND role_code IN ('HR_USER','LECTURER') AND status=1", Integer.class, id) == 0)
+            throw new BusinessException("负责教师不存在或已停用");
+    }
+
+    private void auditRoster(SessionUserVO actor, String action, Object id) {
+        auditLogService.log(actor.getId(), actor.getUsername(), actor.getRoleCode(), "SCHOOL_EXAM", action,
+                "ROSTER", String.valueOf(id), "名册变更");
     }
 
     @Transactional
@@ -217,6 +294,7 @@ public class SchoolExamService {
             throw new BusinessException("仅管理员可设置负责教师和成绩可见性");
         }
         if (request.getId() != null && actor != null) requireExamAccess(request.getId(), actor);
+        if (!managesAccess) requireClassAccess(request.getClassId(), actor);
         List<Long> teacherIds = request.getResponsibleTeacherIds() == null ? List.of() : request.getResponsibleTeacherIds().stream().distinct().toList();
         if (managesAccess) for (Long teacherId : teacherIds) {
             Integer valid = jdbc.queryForObject("SELECT COUNT(*) FROM sys_user WHERE id=? AND role_code IN ('HR_USER','LECTURER') AND status=1", Integer.class, teacherId);
@@ -303,6 +381,9 @@ public class SchoolExamService {
                 for (Long teacherId : teacherIds) jdbc.update("INSERT INTO school_exam_teacher(exam_id,user_id) VALUES(?,?)", examId, teacherId);
             }
         }
+        if (!managesAccess && request.getId() == null) {
+            jdbc.update("INSERT INTO school_exam_teacher(exam_id,user_id) VALUES(?,?)", examId, actor.getId());
+        }
         return getExam(examId);
     }
 
@@ -363,6 +444,7 @@ public class SchoolExamService {
             List<Map<String, Object>> attempts = jdbc.queryForList("SELECT a.process_id AS processId, a.started_at AS startedAt, p.overall_status AS overallStatus, p.stage_status AS stageStatus, p.process_status_view AS statusView, p.anti_cheat_switch_count AS antiCheatSwitchCount FROM school_exam_attempt a JOIN school_exam_process p ON p.id=a.process_id WHERE a.exam_id=? AND a.student_id=?",
                     number(row.get("id")), number(student.get("id")));
             if (!attempts.isEmpty()) row.putAll(attempts.get(0));
+            if (!studentScoreVisible(row)) maskStudentAttempt(row);
         }
         return rows;
     }
@@ -378,9 +460,10 @@ public class SchoolExamService {
     @Transactional
     public Map<String, Object> startExam(Long examId, Long userId) {
         Map<String, Object> student = requireStudentByUser(userId);
+        jdbc.update("UPDATE school_exam SET id=id WHERE id=?", examId);
+        Map<String, Object> exam = requireAvailableExam(examId, number(student.get("classId")));
         Map<String, Object> existing = singleOrNull("SELECT process_id AS processId FROM school_exam_attempt WHERE exam_id=? AND student_id=?", examId, number(student.get("id")));
         if (existing != null) return Map.of("processId", number(existing.get("processId")), "resumed", true);
-        Map<String, Object> exam = requireAvailableExam(examId, number(student.get("classId")));
         RecruitmentCandidate candidate = candidateMapper.selectSchoolCandidate(number(exam.get("legacyJobId")), userId);
         if (candidate == null) {
             candidate = new RecruitmentCandidate();
@@ -430,10 +513,7 @@ public class SchoolExamService {
                 attempt.put("lossRate", analysis.get("lossRate"));
                 attempt.put("aiSummary", analysis.get("aiSummary"));
             } else {
-                attempt.put("averageScore", null);
-                attempt.put("scoreRate", null);
-                attempt.put("lossRate", null);
-                attempt.put("aiSummary", null);
+                maskStudentAttempt(attempt);
             }
         }
         return attempts;
@@ -449,8 +529,15 @@ public class SchoolExamService {
     }
 
     private boolean studentScoreVisible(Map<String, Object> attempt) {
-        boolean finished = !"IN_PROGRESS".equals(string(attempt.get("overallStatus")));
+        boolean finished = attempt.get("overallStatus") != null && !"IN_PROGRESS".equals(string(attempt.get("overallStatus")));
         return integer(attempt.get(finished ? "showFinalScore" : "showLiveScore")) == 1;
+    }
+
+    private void maskStudentAttempt(Map<String, Object> attempt) {
+        for (String field : List.of("averageScore", "scoreRate", "lossRate", "aiSummary", "passingScore", "followUpThreshold")) attempt.put(field, null);
+        boolean finished = attempt.get("overallStatus") != null && !"IN_PROGRESS".equals(string(attempt.get("overallStatus")));
+        attempt.put("statusView", finished ? "答题已提交" : "答题中");
+        if (finished) { attempt.put("overallStatus", "COMPLETED"); attempt.put("stageStatus", "COMPLETED"); }
     }
 
     public Map<String, Object> analytics(Long examId, Long classId) {
@@ -543,6 +630,9 @@ public class SchoolExamService {
                         + "r.interviewer_comment AS interviewerComment,r.teacher_note AS teacherNote,r.created_at AS createdAt,r.updated_at AS updatedAt "
                         + "FROM school_answer_record r LEFT JOIN school_exam_process_stage ps ON ps.id=r.process_stage_id "
                         + "WHERE r.process_id=? ORDER BY COALESCE(ps.sequence_no,0),r.sequence_no,r.id", processId);
+        for (var record : records) record.put("reviewRequired", "COMPLETED".equals(record.get("answerStatus"))
+                && record.get("reviewedScore") == null && record.get("aiScore") != null && integer(record.get("aiScore")) >= 90);
+        attempt.put("reviewRequiredCount", records.stream().filter(record -> Boolean.TRUE.equals(record.get("reviewRequired"))).count());
         attempt.put("records", records);
         attempt.put("answeredRounds", records.stream().filter(record -> "COMPLETED".equals(string(record.get("answerStatus")))).count());
         attempt.putAll(scoreComparison(processId));
@@ -553,6 +643,8 @@ public class SchoolExamService {
         String sql = "SELECT a.process_id AS processId,a.exam_id AS examId,e.exam_name AS examName,"
                 + "s.student_no AS studentNo,s.full_name AS fullName,c.class_name AS className,"
                 + "p.overall_status AS overallStatus,p.ai_average_score AS averageScore "
+                + ", (SELECT COUNT(*) FROM school_answer_record r WHERE r.process_id=a.process_id AND r.answer_status='COMPLETED' "
+                + "AND r.average_score>=90 AND NOT EXISTS (SELECT 1 FROM school_score_review sr WHERE sr.record_id=r.id)) AS reviewRequiredCount "
                 + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id "
                 + "JOIN school_student s ON s.id=a.student_id JOIN school_class c ON c.id=s.class_id "
                 + "JOIN school_exam_process p ON p.id=a.process_id WHERE 1=1";
@@ -562,8 +654,7 @@ public class SchoolExamService {
         if (name != null && !name.isBlank()) { sql += " AND s.full_name LIKE ?"; args.add("%" + name.trim() + "%"); }
         if (studentNo != null && !studentNo.isBlank()) { sql += " AND s.student_no LIKE ?"; args.add("%" + studentNo.trim() + "%"); }
         if (!isExamAdministrator(actor)) {
-            sql += " AND (NOT EXISTS (SELECT 1 FROM school_exam_teacher t WHERE t.exam_id=e.id) "
-                    + "OR EXISTS (SELECT 1 FROM school_exam_teacher t WHERE t.exam_id=e.id AND t.user_id=?))";
+            sql += " AND EXISTS (SELECT 1 FROM school_exam_teacher t WHERE t.exam_id=e.id AND t.user_id=?)";
             args.add(actor.getId());
         }
         List<Map<String, Object>> rows = jdbc.queryForList(sql + " ORDER BY a.started_at DESC LIMIT 500", args.toArray());
@@ -628,8 +719,6 @@ public class SchoolExamService {
 
     private boolean canAccessExam(Long examId, SessionUserVO actor) {
         if (actor == null || isExamAdministrator(actor)) return true;
-        Integer assigned = jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_teacher WHERE exam_id=?", Integer.class, examId);
-        if (assigned == null || assigned == 0) return true;
         return jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_teacher WHERE exam_id=? AND user_id=?", Integer.class,
                 examId, actor.getId()) > 0;
     }
@@ -712,12 +801,25 @@ public class SchoolExamService {
         });
     }
 
+    @Transactional
+    public Map<String, Object> importClasses(MultipartFile file, SessionUserVO actor) {
+        requireRosterAdministrator(actor);
+        var result = importClasses(file);
+        auditRoster(actor, "IMPORT_CLASSES", "batch");
+        return result;
+    }
+
     public byte[] classesTemplate() {
         return workbookTemplate("班级导入", new String[]{"专业", "班级名称", "班级代码", "说明"});
     }
 
     @Transactional
     public Map<String, Object> importStudents(MultipartFile file) {
+        return importStudents(file, null);
+    }
+
+    @Transactional
+    public Map<String, Object> importStudents(MultipartFile file, SessionUserVO actor) {
         return importWorkbook(file, row -> {
             String classCode = cell(row, 2);
             Map<String, Object> schoolClass = singleOrNull("SELECT id FROM school_class WHERE class_code=? AND status=1", classCode);
@@ -727,7 +829,7 @@ public class SchoolExamService {
             request.setFullName(cell(row, 1));
             request.setClassId(number(schoolClass.get("id")));
             request.setStatus(1);
-            return saveStudent(request);
+            return actor == null ? saveStudent(request) : saveStudent(request, actor);
         });
     }
 
@@ -902,7 +1004,7 @@ public class SchoolExamService {
         LocalDateTime publishStart = toDateTime(exam.get("publishStart"));
         LocalDateTime publishEnd = toDateTime(exam.get("publishEnd"));
         return (publishStart == null || !now.isBefore(publishStart))
-                && (publishEnd == null || !now.isAfter(publishEnd));
+                && (publishEnd == null || now.isBefore(publishEnd));
     }
 
     private Map<String, Object> requireClass(Long id) {

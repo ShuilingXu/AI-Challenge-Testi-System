@@ -18,6 +18,7 @@ import com.autohr.modules.recruitment.entity.RecruitmentJob;
 import com.autohr.modules.recruitment.mapper.RecruitmentCandidateMapper;
 import com.autohr.modules.recruitment.mapper.RecruitmentJobMapper;
 import com.autohr.modules.school.dto.SchoolClassSaveRequest;
+import com.autohr.modules.school.dto.SchoolStudentSaveRequest;
 import com.autohr.modules.school.dto.SchoolExamSaveRequest;
 import com.autohr.modules.school.dto.StudentRegistrationRequest;
 import com.autohr.modules.school.dto.ScoreReviewRequest;
@@ -45,6 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -704,6 +707,128 @@ class SchoolExamServiceTest {
         jdbc.update("INSERT INTO school_exam(id,exam_code,exam_name,class_id,legacy_job_id,status) VALUES(?,?,?,?,?,?)",
                 31L, "EX-1", "Java Assessment", 1L, 11L, "PUBLISHED");
         jdbc.update("INSERT INTO school_exam_attempt(exam_id,student_id,process_id) VALUES(?,?,?)", 31L, 9L, 41L);
+    }
+
+    @Test
+    void resumeRequiresPublishedExamAndCurrentWindowAndClassMatch() {
+        seedCompletedAttempt();
+        assertEquals(true, service.startExam(31L, 88L).get("resumed"));
+        for (String status : List.of("CLOSED", "DRAFT")) {
+            jdbc.update("UPDATE school_exam SET status=? WHERE id=31", status);
+            assertThrows(BusinessException.class, () -> service.startExam(31L, 88L));
+        }
+        jdbc.update("UPDATE school_exam SET status='PUBLISHED',publish_end=? WHERE id=31", java.time.LocalDateTime.now().minusMinutes(1).toString());
+        assertThrows(BusinessException.class, () -> service.startExam(31L, 88L));
+        jdbc.update("UPDATE school_exam SET publish_end=NULL,publish_start=? WHERE id=31", java.time.LocalDateTime.now().plusMinutes(1).toString());
+        assertThrows(BusinessException.class, () -> service.startExam(31L, 88L));
+        jdbc.update("UPDATE school_exam SET publish_start=NULL,class_id=2 WHERE id=31");
+        assertThrows(BusinessException.class, () -> service.startExam(31L, 88L));
+        verify(interviewService, never()).startInterviewProcess(any());
+    }
+
+    private SessionUserVO actor(long id, String role) {
+        var actor = new SessionUserVO(); actor.setId(id); actor.setRoleCode(role); actor.setUsername("teacher" + id); return actor;
+    }
+
+    @Test
+    void unassignedExamsDenyTeachersAcrossScoresDetailsReviewResetAndRecording() {
+        seedCompletedAttempt();
+        var teacher = actor(91, "LECTURER");
+        jdbc.update("INSERT INTO school_answer_record(process_id,question_content,answer_status,average_score,sequence_no) VALUES(41,'Q','COMPLETED',80,1)");
+        var recordId = jdbc.queryForObject("SELECT id FROM school_answer_record WHERE process_id=41", Long.class);
+        var review = new ScoreReviewRequest(); review.setScore(100);
+        assertTrue(service.listAdminExams(teacher).isEmpty());
+        assertTrue(service.searchScores(null, null, null, null, teacher).isEmpty());
+        assertEquals(0, service.analytics(null, null, teacher).get("studentCount"));
+        assertThrows(BusinessException.class, () -> service.adminAttemptDetails(41L, teacher));
+        assertThrows(BusinessException.class, () -> service.reviewScore(recordId, review, teacher));
+        assertThrows(BusinessException.class, () -> service.resetAttempt(41L, true, teacher));
+        var recording = new SchoolExamRecordingService(jdbc, service);
+        assertThrows(BusinessException.class, () -> recording.list(41L, teacher));
+        assertThrows(BusinessException.class, () -> recording.open(41L, 0, teacher));
+        assertEquals(1, service.searchScores(null, null, null, null, actor(1, "SYSTEM_ADMIN")).size());
+        assertEquals(80, jdbc.queryForObject("SELECT average_score FROM school_answer_record WHERE id=?", Integer.class, recordId));
+    }
+
+    @Test
+    void rosterScopeFiltersReadsAndProtectsBothSourceAndDestinationOfUpdates() throws Exception {
+        seedCompletedAttempt();
+        jdbc.update("INSERT INTO school_class(id,major_name,class_name,class_code,status) VALUES(2,'Other','Other','OTHER',1)");
+        jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(91,'teacher1','x','LECTURER',1)");
+        jdbc.update("INSERT INTO school_class_teacher VALUES(1,91)");
+        var teacher = actor(91, "LECTURER");
+        var outsider = actor(92, "HR_USER");
+        assertEquals(1, service.listClasses(null, teacher).size());
+        assertEquals(1, service.listStudents(null, null, teacher).size());
+        assertTrue(service.listClasses("Class", outsider).isEmpty());
+        assertTrue(service.listStudents(1L, "Ada", outsider).isEmpty());
+        var request = new SchoolStudentSaveRequest(); request.setId(9L); request.setStudentNo("2026001"); request.setFullName("Ada edited"); request.setClassId(1L);
+        assertThrows(BusinessException.class, () -> service.saveStudent(request, outsider));
+        service.saveStudent(request, teacher);
+        request.setClassId(2L);
+        assertThrows(BusinessException.class, () -> service.saveStudent(request, teacher));
+        jdbc.update("UPDATE school_student SET class_id=2 WHERE id=9");
+        request.setClassId(1L);
+        assertThrows(BusinessException.class, () -> service.saveStudent(request, teacher));
+        assertThrows(BusinessException.class, () -> service.deleteStudent(9L, teacher));
+        assertThrows(BusinessException.class, () -> service.deleteClass(2L, teacher));
+        assertThrows(BusinessException.class, () -> service.saveClass(new SchoolClassSaveRequest(), teacher));
+        assertThrows(BusinessException.class, () -> service.importClasses(null, teacher));
+        var imported = service.importStudents(excelFile("students.xlsx", workbook -> {
+            var sheet = workbook.createSheet("students"); sheet.createRow(0).createCell(0).setCellValue("Header");
+            var row = sheet.createRow(1); row.createCell(0).setCellValue("newstudent"); row.createCell(1).setCellValue("New"); row.createCell(2).setCellValue("OTHER");
+        }), teacher);
+        assertEquals(1, imported.get("failureCount"));
+        assertEquals(0, imported.get("successCount"));
+        verify(userMapper, never()).deleteById(any(Long.class));
+    }
+
+    @Test
+    void administratorAssignsClassesAndTeachersOwnNewExams() {
+        jdbc.update("INSERT INTO sys_user(id,username,password,role_code,status) VALUES(91,'teacher1','x','LECTURER',1)");
+        var classRequest = new SchoolClassSaveRequest(); classRequest.setMajorName("CS"); classRequest.setClassName("Class"); classRequest.setClassCode("OWN"); classRequest.setTeacherIds(List.of(91L));
+        var admin = actor(1, "SYSTEM_ADMIN");
+        var classId = ((Number) service.saveClass(classRequest, admin).get("id")).longValue();
+        assertEquals(List.of(91L), service.listClasses(null, admin).get(0).get("teacherIds"));
+        var request = new SchoolExamSaveRequest(); request.setExamCode("OWN"); request.setExamName("Owned"); request.setClassId(classId);
+        doAnswer(invocation -> { ((RecruitmentJob) invocation.getArgument(0)).setId(11L); return 1; }).when(jobMapper).insertSchoolJob(any());
+        var teacher = actor(91, "LECTURER");
+        var examId = ((Number) service.saveExam(request, teacher).get("id")).longValue();
+        assertEquals(List.of(91L), jdbc.queryForList("SELECT user_id FROM school_exam_teacher WHERE exam_id=?", Long.class, examId));
+        assertEquals(1, service.listAdminExams(teacher).size());
+        assertTrue(service.listAdminExams(actor(92, "HR_USER")).isEmpty());
+        verify((AuditLogService) ReflectionTestUtils.getField(service, "auditLogService")).log(eq(1L), any(), eq("SYSTEM_ADMIN"), eq("SCHOOL_EXAM"), eq("SAVE_CLASS"), eq("ROSTER"), any(), any());
+    }
+
+    @Test
+    void hiddenPassAndFailExposeIdenticalNeutralStatusInBothStudentLists() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam SET show_final_score=0 WHERE id=31");
+        for (String status : List.of("REJECTED", "COMPLETED")) {
+            jdbc.update("UPDATE school_exam_process SET overall_status=?,stage_status=?,process_status_view=? WHERE id=41", status, status, status.equals("REJECTED") ? "考试未达到及格线" : "考试已完成");
+            for (var value : List.of(service.listStudentAttempts(88L).get(0), service.listStudentExams(88L).get(0))) {
+                assertEquals("答题已提交", value.get("statusView"));
+                assertEquals("COMPLETED", value.get("overallStatus"));
+                assertEquals("COMPLETED", value.get("stageStatus"));
+                assertNull(value.get("passingScore")); assertNull(value.get("followUpThreshold")); assertNull(value.get("averageScore"));
+            }
+        }
+        jdbc.update("UPDATE school_exam SET show_final_score=1 WHERE id=31");
+        assertEquals("考试已完成", service.listStudentAttempts(88L).get(0).get("statusView"));
+    }
+
+    @Test
+    void highAiScoresEnterReviewQueueAndTeacherReviewClearsFlag() {
+        seedCompletedAttempt();
+        jdbc.update("INSERT INTO school_answer_record(process_id,question_content,answer_status,average_score,sequence_no) VALUES(41,'Q','COMPLETED',95,1)");
+        var admin = actor(1, "SYSTEM_ADMIN");
+        var detail = service.adminAttemptDetails(41L, admin);
+        assertEquals(1L, detail.get("reviewRequiredCount"));
+        assertEquals(true, rows(detail.get("records")).get(0).get("reviewRequired"));
+        assertEquals(1, ((Number) service.searchScores(null, null, null, null, admin).get(0).get("reviewRequiredCount")).intValue());
+        var review = new ScoreReviewRequest(); review.setScore(95); review.setNote("已人工核验");
+        var result = service.reviewScore(((Number) rows(detail.get("records")).get(0).get("id")).longValue(), review, admin);
+        assertEquals(0L, result.get("reviewRequiredCount"));
     }
 
     private StudentRegistrationRequest registration(String studentNo, String fullName, Long classId) {

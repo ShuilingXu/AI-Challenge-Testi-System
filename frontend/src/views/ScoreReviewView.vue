@@ -13,6 +13,7 @@
         <el-table-column prop="className" label="班级" /><el-table-column prop="examName" label="考试" />
         <el-table-column prop="fullName" label="姓名" /><el-table-column prop="studentNo" label="学号" />
         <el-table-column label="AI 给分"><template #default="{ row }">{{ row.aiScore == null ? '待评分' : `${row.aiScore} 分` }}</template></el-table-column>
+        <el-table-column label="待复核高分题" width="120"><template #default="{ row }"><el-tag v-if="row.reviewRequiredCount" type="warning">{{ row.reviewRequiredCount }} 题</el-tag><span v-else>—</span></template></el-table-column>
         <el-table-column label="人工复核后给分"><template #default="{ row }">{{ row.reviewedScore == null ? '未复核' : `${row.reviewedScore} 分` }}</template></el-table-column>
         <el-table-column label="操作" width="120"><template #default="{ row }"><el-button text type="primary" @click="open(row)">人工改分</el-button></template></el-table-column>
       </el-table>
@@ -22,6 +23,7 @@
       <article v-for="record in detail.records || []" :key="record.id" class="answer">
         <h3>第 {{ record.sequenceNo }} 题 · {{ record.knowledgePoint }}</h3>
         <dl><dt>题目</dt><dd>{{ record.questionContent }}</dd><dt>回答</dt><dd>{{ record.answerContent || '尚未作答' }}</dd><dt>AI 判分评语</dt><dd>{{ record.interviewerComment || '暂无评语' }}</dd></dl>
+        <el-alert v-if="record.reviewRequired" title="AI 评分达到 90 分，需教师二次复核" type="warning" :closable="false" />
         <div class="score-line"><strong>AI 给分：{{ record.aiScore == null ? '待评分' : `${record.aiScore} 分` }}</strong><strong>人工复核后给分：{{ record.reviewedScore == null ? '未复核' : `${record.reviewedScore} 分` }}</strong></div>
         <div v-if="record.reviewedScore != null" class="review-note"><strong>复核注释</strong><p>{{ record.teacherNote || '本次复核未填写注释' }}</p></div>
         <div v-if="record.answerStatus === 'COMPLETED'" class="review-controls">

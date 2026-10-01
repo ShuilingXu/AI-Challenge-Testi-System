@@ -9,6 +9,12 @@ site-content:
   path: ${SITE_CONTENT_PATH:.site-content.json}
 
 school:
+  recording:
+    directory: ${SCHOOL_RECORDING_DIRECTORY:}
+    max-total-bytes: ${SCHOOL_RECORDING_MAX_TOTAL_BYTES:536870912}
+    max-segments: ${SCHOOL_RECORDING_MAX_SEGMENTS:720}
+    uploads-per-minute: ${SCHOOL_RECORDING_UPLOADS_PER_MINUTE:20}
+    min-free-bytes: ${SCHOOL_RECORDING_MIN_FREE_BYTES:1073741824}
   llm:
     base-url: ${SCHOOL_LLM_BASE_URL:}
     api-key: ${SCHOOL_LLM_API_KEY:}

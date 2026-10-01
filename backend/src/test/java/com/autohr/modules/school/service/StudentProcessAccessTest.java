@@ -74,6 +74,29 @@ class StudentProcessAccessTest {
         assertExecutionBlocked();
     }
 
+    @Test
+    void hiddenScoresMaskPassFailAndThresholdsOnProcessAndHeartbeat() {
+        jdbc.update("UPDATE school_exam SET show_live_score=0,show_final_score=0 WHERE id=31");
+        var mapper = (InterviewProcessMapper) ReflectionTestUtils.getField(service, "processMapper");
+        var process = mapper.selectById(41L);
+        process.setAiThresholdScore(60); process.setAiFollowUpThreshold(50); process.setAiAverageScore(45);
+        for (String status : java.util.List.of("REJECTED", "COMPLETED")) {
+            process.setOverallStatus(status); process.setStageStatus(status);
+            process.setProcessStatusView(status.equals("REJECTED") ? "考试未达到及格线" : "考试已完成");
+            jdbc.update("UPDATE school_exam_process SET overall_status=?", status);
+            for (var result : java.util.List.of(service.getIntervieweeProcess(41L, 88L), service.heartbeat(41L, 88L))) {
+                assertEquals("答题已提交", result.getProcessStatusView());
+                assertEquals("COMPLETED", result.getOverallStatus());
+                assertEquals("COMPLETED", result.getStageStatus());
+                org.junit.jupiter.api.Assertions.assertNull(result.getAiAverageScore());
+                org.junit.jupiter.api.Assertions.assertNull(result.getAiThresholdScore());
+                org.junit.jupiter.api.Assertions.assertNull(result.getAiFollowUpThreshold());
+            }
+        }
+        jdbc.update("UPDATE school_exam SET show_final_score=1");
+        assertEquals(45, service.getIntervieweeProcess(41L, 88L).getAiAverageScore());
+    }
+
     private void assertExecutionBlocked() {
         AiAnswerRequest answer = new AiAnswerRequest();
         answer.setProcessId(41L);

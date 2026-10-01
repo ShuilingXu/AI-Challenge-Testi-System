@@ -63,24 +63,24 @@ public class SchoolExamController {
     }
 
     @GetMapping("/admin/classes")
-    public ApiResponse<List<Map<String, Object>>> listClasses(@RequestParam(required = false) String keyword) {
-        return ApiResponse.success(schoolExamService.listClasses(keyword));
+    public ApiResponse<List<Map<String, Object>>> listClasses(Authentication authentication, @RequestParam(required = false) String keyword) {
+        return ApiResponse.success(schoolExamService.listClasses(keyword, current(authentication)));
     }
 
     @PostMapping("/admin/classes")
-    public ApiResponse<Map<String, Object>> saveClass(@Valid @RequestBody SchoolClassSaveRequest request) {
-        return ApiResponse.success(schoolExamService.saveClass(request));
+    public ApiResponse<Map<String, Object>> saveClass(Authentication authentication, @Valid @RequestBody SchoolClassSaveRequest request) {
+        return ApiResponse.success(schoolExamService.saveClass(request, current(authentication)));
     }
 
     @PostMapping("/admin/classes/{classId}/delete")
-    public ApiResponse<Void> deleteClass(@PathVariable Long classId) {
-        schoolExamService.deleteClass(classId);
+    public ApiResponse<Void> deleteClass(Authentication authentication, @PathVariable Long classId) {
+        schoolExamService.deleteClass(classId, current(authentication));
         return ApiResponse.success("deleted", null);
     }
 
     @PostMapping("/admin/classes/import")
-    public ApiResponse<Map<String, Object>> importClasses(@RequestParam("file") MultipartFile file) {
-        return ApiResponse.success(schoolExamService.importClasses(file));
+    public ApiResponse<Map<String, Object>> importClasses(Authentication authentication, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(schoolExamService.importClasses(file, current(authentication)));
     }
 
     @GetMapping("/admin/classes/template")
@@ -89,25 +89,25 @@ public class SchoolExamController {
     }
 
     @GetMapping("/admin/students")
-    public ApiResponse<List<Map<String, Object>>> listStudents(@RequestParam(required = false) Long classId,
+    public ApiResponse<List<Map<String, Object>>> listStudents(Authentication authentication, @RequestParam(required = false) Long classId,
                                                                  @RequestParam(required = false) String keyword) {
-        return ApiResponse.success(schoolExamService.listStudents(classId, keyword));
+        return ApiResponse.success(schoolExamService.listStudents(classId, keyword, current(authentication)));
     }
 
     @PostMapping("/admin/students")
-    public ApiResponse<Map<String, Object>> saveStudent(@Valid @RequestBody SchoolStudentSaveRequest request) {
-        return ApiResponse.success(schoolExamService.saveStudent(request));
+    public ApiResponse<Map<String, Object>> saveStudent(Authentication authentication, @Valid @RequestBody SchoolStudentSaveRequest request) {
+        return ApiResponse.success(schoolExamService.saveStudent(request, current(authentication)));
     }
 
     @PostMapping("/admin/students/{studentId}/delete")
-    public ApiResponse<Void> deleteStudent(@PathVariable Long studentId) {
-        schoolExamService.deleteStudent(studentId);
+    public ApiResponse<Void> deleteStudent(Authentication authentication, @PathVariable Long studentId) {
+        schoolExamService.deleteStudent(studentId, current(authentication));
         return ApiResponse.success("deleted", null);
     }
 
     @PostMapping("/admin/students/import")
-    public ApiResponse<Map<String, Object>> importStudents(@RequestParam("file") MultipartFile file) {
-        return ApiResponse.success(schoolExamService.importStudents(file));
+    public ApiResponse<Map<String, Object>> importStudents(Authentication authentication, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(schoolExamService.importStudents(file, current(authentication)));
     }
 
     @GetMapping("/admin/students/template")
@@ -220,7 +220,9 @@ public class SchoolExamController {
     }
 
     private SessionUserVO current(Authentication authentication) {
-        return authService.loadUserByUsername(authentication.getName());
+        SessionUserVO actor = authService.loadUserByUsername(authentication.getName());
+        if (actor == null) throw new com.autohr.common.exception.BusinessException("当前账户不可用");
+        return actor;
     }
 
     private ResponseEntity<byte[]> templateResponse(String filename, byte[] content) {
