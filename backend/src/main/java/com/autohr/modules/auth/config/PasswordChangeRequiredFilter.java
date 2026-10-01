@@ -24,7 +24,7 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
 
     private static final Set<String> ALLOWED_PATHS = Set.of(
             "/api/auth/me", "/api/auth/change-password", "/api/auth/logout",
-            "/api/auth/login", "/api/auth/captcha"
+            "/api/auth/login", "/api/auth/captcha", "/api/site-settings"
     );
 
     private final SysUserMapper sysUserMapper;
@@ -32,7 +32,8 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (HttpMethod.OPTIONS.matches(request.getMethod()) || ALLOWED_PATHS.contains(request.getRequestURI())) {
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        if (!path.startsWith("/api/") || HttpMethod.OPTIONS.matches(request.getMethod()) || ALLOWED_PATHS.contains(path)) {
             filterChain.doFilter(request, response);
             return;
         }

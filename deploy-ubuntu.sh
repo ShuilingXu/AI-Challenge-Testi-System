@@ -304,6 +304,9 @@ prepare_env() {
   fi
   chmod 600 "$ENV_FILE"
   chown "$(id -un)" "$ENV_FILE"
+  if [ -z "$(get_env_value DB_TYPE)" ]; then
+    set_env_value DB_TYPE "${DB_TYPE:-sqlite}"
+  fi
 
   local jwt_secret
   jwt_secret="$(get_env_value JWT_SECRET)"
@@ -408,7 +411,8 @@ for key, replacement in replacements.items():
         result.append(replacement)
 path.write_text("\n".join(result) + "\n", encoding="utf-8")
 PY
-    sudo systemctl enable --now redis-server
+    sudo systemctl enable redis-server
+    sudo systemctl restart redis-server
   fi
 
   local redis_response=""

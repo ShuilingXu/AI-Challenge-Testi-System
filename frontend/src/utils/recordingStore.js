@@ -200,3 +200,38 @@ export function formatRecordingSize(byteSize) {
   if (!byteSize) return '0 MB'
   return `${(byteSize / 1024 / 1024).toFixed(byteSize >= 10 * 1024 * 1024 ? 1 : 2)} MB`
 }
+
+// Keep each exam segment as an independent playable WebM file. Reuse the
+// recording database so pending uploads survive reloads and completed exams.
+export async function saveExamRecordingSegment(processId, segmentNo, blob) {
+  const key = `exam-segment:${processId}:${segmentNo}`
+  const session = await beginRecordingSession(key, { processId, segmentNo, kind: 'exam-segment', contentType: 'video/webm' })
+  if (!session.byteSize) {
+    const result = await appendRecordingChunk(key, blob)
+    if (!result.appended) throw new Error('录像片段超过浏览器暂存容量')
+  }
+  return key
+}
+
+export async function loadExamRecordingSegments(processId) {
+  const database = await openRecordingDatabase()
+  const transaction = database.transaction(SESSION_STORE, 'readonly')
+  const completed = transactionComplete(transaction)
+  const sessions = await requestResult(transaction.objectStore(SESSION_STORE).getAll())
+  await completed
+  const segments = []
+  for (const session of sessions.filter(item => item.kind === 'exam-segment' && Number(item.processId) === Number(processId))) {
+    const recording = await buildRecordingFile(session.key)
+    if (recording) segments.push({ key: session.key, segmentNo: session.segmentNo, blob: recording.file })
+  }
+  return segments.sort((left, right) => left.segmentNo - right.segmentNo)
+}
+
+export async function listPendingExamRecordingProcessIds() {
+  const database = await openRecordingDatabase()
+  const transaction = database.transaction(SESSION_STORE, 'readonly')
+  const completed = transactionComplete(transaction)
+  const sessions = await requestResult(transaction.objectStore(SESSION_STORE).getAll())
+  await completed
+  return [...new Set(sessions.filter(item => item.kind === 'exam-segment' && item.byteSize > 0).map(item => Number(item.processId)))]
+}

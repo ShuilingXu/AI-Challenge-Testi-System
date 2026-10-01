@@ -43,6 +43,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AdminNav from '../components/AdminNav.vue'
 import { schoolApi } from '../services/api'
+import { updateReviewDrafts } from '../utils/scoreReviewDrafts'
 
 const classes = ref([]); const exams = ref([]); const results = ref([])
 const route = useRoute(); const router = useRouter()
@@ -50,9 +51,9 @@ const filter = reactive({ classId: null, examId: null, name: '', studentNo: '' }
 const detail = reactive({ records: [] }); const drafts = reactive({})
 const loading = ref(false); const savingId = ref(null)
 function closeDetail() { router.push('/admin/score-review') }
-function setDetail(value) {
+function setDetail(value, savedRecordId = null) {
   Object.assign(detail, value)
-  for (const record of value.records || []) drafts[record.id] = { score: record.averageScore ?? 0, note: record.teacherNote || '' }
+  updateReviewDrafts(drafts, value.records, savedRecordId)
 }
 async function search() {
   loading.value = true
@@ -63,7 +64,7 @@ async function open(row) { await router.push(`/admin/score-review/${row.processI
 async function loadDetail(processId) { if (!processId) { Object.assign(detail, { processId: null, records: [] }); return }; try { setDetail((await schoolApi.getAdminAttempt(processId)).data) } catch (error) { ElMessage.error(error.message || '答题记录加载失败'); closeDetail() } }
 async function save(record) {
   savingId.value = record.id
-  try { setDetail((await schoolApi.reviewScore(record.id, drafts[record.id])).data); ElMessage.success('复核结果已保存'); await search() }
+  try { setDetail((await schoolApi.reviewScore(record.id, drafts[record.id])).data, record.id); ElMessage.success('复核结果已保存'); await search() }
   catch (error) { ElMessage.error(error.message || '复核保存失败') } finally { savingId.value = null }
 }
 onMounted(async () => {

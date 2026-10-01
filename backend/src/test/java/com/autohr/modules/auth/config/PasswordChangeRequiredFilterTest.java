@@ -23,7 +23,8 @@ class PasswordChangeRequiredFilterTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("student", null, List.of()));
         try {
-            for (String path : List.of("/api/auth/me", "/api/auth/login", "/api/auth/captcha", "/api/auth/change-password", "/api/auth/logout")) {
+            for (String path : List.of("/api/auth/me", "/api/auth/login", "/api/auth/captcha", "/api/auth/change-password", "/api/auth/logout",
+                    "/change-password", "/changepasswd", "/login", "/index.html", "/assets/review.js", "/api/site-settings")) {
                 var response = new MockHttpServletResponse();
                 filter.doFilter(new MockHttpServletRequest("GET", path), response,
                         (req, res) -> res.getWriter().write("allowed"));
@@ -34,6 +35,9 @@ class PasswordChangeRequiredFilterTest {
                     (req, res) -> fail("must not reach protected endpoint"));
             assertEquals(403, response.getStatus());
             assertTrue(response.getContentAsString().contains("PASSWORD_CHANGE_REQUIRED"));
+            var contextualRequest = new MockHttpServletRequest("GET", "/school/api/exams/student/exams");
+            contextualRequest.setContextPath("/school");
+            filter.doFilter(contextualRequest, new MockHttpServletResponse(), (req, res) -> fail("context path must not bypass protection"));
             user.setMustChangePassword(0);
             response = new MockHttpServletResponse();
             filter.doFilter(new MockHttpServletRequest("GET", "/api/exams/student/exams"), response,

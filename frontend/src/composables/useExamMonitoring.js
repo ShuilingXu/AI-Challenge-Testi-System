@@ -1,11 +1,14 @@
 import { reactive, ref } from 'vue'
 import { schoolApi } from '../services/api'
+import { deleteRecordingSession, loadExamRecordingSegments, saveExamRecordingSegment } from '../utils/recordingStore'
 
 export function useExamMonitoring(processId) {
   const cameraPreview = ref(null)
   const ready = ref(false)
   const error = ref('')
   const recording = ref(false)
+  const pendingCount = ref(0)
+  const uploading = ref(false)
   let cameraStream = null
   let screenStream = null
   let outputStream = null
@@ -16,6 +19,7 @@ export function useExamMonitoring(processId) {
   let canvas = null
   let nextSegmentNo = 0
   let uploadQueue = Promise.resolve()
+  let uploadFailed = false
   const pendingUploads = []
   let stopping = false
   let captureGeneration = 0
@@ -26,7 +30,12 @@ export function useExamMonitoring(processId) {
     const result = (await schoolApi.monitoringPolicy(processId)).data
     Object.assign(policy, { cameraEnabled: Number(result.cameraEnabled) === 1, screenRecordingEnabled: Number(result.screenRecordingEnabled) === 1 })
     nextSegmentNo = Number(result.nextSegmentNo) || 0
+    const restored = await loadExamRecordingSegments(processId)
+    pendingUploads.push(...restored)
+    pendingCount.value = pendingUploads.length
+    nextSegmentNo = Math.max(nextSegmentNo, ...restored.map(item => item.segmentNo + 1))
     prepared = true
+    if (pendingUploads.length) void retryUploads()
   }
 
   function stopTracks() {
@@ -53,7 +62,10 @@ export function useExamMonitoring(processId) {
       : Promise.resolve()
     recorder = null
     stopTracks()
-    return finished.then(() => uploadQueue)
+    return finished.then(async () => {
+      await uploadQueue
+      await Promise.all(pendingUploads.map(item => item.saved))
+    })
   }
 
   function lostDevice(name) {
@@ -64,27 +76,52 @@ export function useExamMonitoring(processId) {
 
   function queueUpload(blob) {
     if (!blob.size) return
-    pendingUploads.push({ segmentNo: nextSegmentNo++, blob })
+    const item = { segmentNo: nextSegmentNo++, blob }
+    // Persist immediately, including the final segment created while an older
+    // upload is failing. Upload retries must never delay local durability.
+    item.saved = saveExamRecordingSegment(processId, item.segmentNo, blob)
+      .then(key => { item.key = key; return true })
+      .catch(cause => { item.storageError = cause; return false })
+    pendingUploads.push(item)
+    pendingCount.value = pendingUploads.length
     scheduleUploads()
   }
 
   function scheduleUploads() {
     uploadQueue = uploadQueue.then(async () => {
+      uploading.value = true
       while (pendingUploads.length) {
-        const { segmentNo, blob } = pendingUploads[0]
+        const item = pendingUploads[0]
+        const { segmentNo, blob } = item
+        if (item.saved && !await item.saved) {
+          item.key = await saveExamRecordingSegment(processId, segmentNo, blob)
+          item.saved = null
+        }
         for (let attempt = 0; attempt < 3; attempt++) {
           try { await schoolApi.uploadExamRecording(processId, segmentNo, blob); break } catch (uploadError) {
             if (attempt === 2) throw uploadError
             await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
           }
         }
+        await deleteRecordingSession(item.key)
         pendingUploads.shift()
+        pendingCount.value = pendingUploads.length
       }
+      if (uploadFailed) error.value = ''
+      uploadFailed = false
     }).catch(() => {
-      error.value = '录像上传失败，答题已暂停。请检查网络后重新授权。'
+      uploadFailed = true
+      error.value = pendingUploads.some(item => item.storageError && !item.key)
+        ? '录像暂存失败，请保持页面打开并重试上传。'
+        : '录像上传失败，片段已暂存。请检查网络后重试上传。'
       if (!stopping) void stop()
-    })
+    }).finally(() => { uploading.value = false })
     return uploadQueue
+  }
+
+  async function retryUploads() {
+    await scheduleUploads()
+    return pendingUploads.length === 0
   }
 
   function recordSegment() {
@@ -159,5 +196,5 @@ export function useExamMonitoring(processId) {
     }
   }
 
-  return { cameraPreview, ready, recording, error, prepare, start, stop, policy: () => policy }
+  return { cameraPreview, ready, recording, error, pendingCount, uploading, retryUploads, prepare, start, stop, policy: () => policy }
 }

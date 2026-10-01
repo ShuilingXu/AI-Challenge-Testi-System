@@ -696,7 +696,7 @@ public class SchoolExamService {
         Integer average = jdbc.queryForObject("SELECT ROUND(AVG(average_score)) FROM school_answer_record WHERE process_id=? AND answer_status='COMPLETED'",
                 Integer.class, processId);
         jdbc.update("UPDATE school_exam_process SET ai_average_score=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", average, processId);
-        Map<String, Object> outcome = singleOrNull("SELECT p.overall_status AS status,e.passing_score AS passingScore "
+        Map<String, Object> outcome = singleOrNull("SELECT p.overall_status AS status,COALESCE(p.ai_threshold_score,e.passing_score) AS passingScore "
                 + "FROM school_exam_process p JOIN school_exam_attempt a ON a.process_id=p.id "
                 + "JOIN school_exam e ON e.id=a.exam_id WHERE p.id=?", processId);
         Integer stageCount = jdbc.queryForObject("SELECT COUNT(*) FROM school_exam_process_stage WHERE process_id=?", Integer.class, processId);
@@ -707,6 +707,28 @@ public class SchoolExamService {
                     passed ? "考试已完成" : "考试未达到及格线", processId);
             if (stageCount == 1) jdbc.update("UPDATE school_exam_process_stage SET stage_status=? WHERE process_id=?",
                     passed ? "PASSED" : "REJECTED", processId);
+        } else if (outcome != null && stageCount != null && stageCount > 1) {
+            // Each AI stage passes independently; an overall average must not
+            // hide a failed stage. Interrupted and unstarted stages keep their state.
+            var stages = jdbc.queryForList("SELECT id,stage_status AS status FROM school_exam_process_stage "
+                    + "WHERE process_id=? ORDER BY sequence_no", processId);
+            for (var stage : stages) {
+                if (!List.of("PASSED", "REJECTED").contains(string(stage.get("status")))) continue;
+                Integer stageAverage = jdbc.queryForObject("SELECT ROUND(AVG(average_score)) FROM school_answer_record "
+                        + "WHERE process_stage_id=? AND answer_status='COMPLETED'", Integer.class, stage.get("id"));
+                if (stageAverage == null) continue;
+                String stageStatus = stageAverage >= integer(outcome.get("passingScore")) ? "PASSED" : "REJECTED";
+                jdbc.update("UPDATE school_exam_process_stage SET stage_status=? WHERE id=?", stageStatus, stage.get("id"));
+                stage.put("status", stageStatus);
+            }
+            if (List.of("COMPLETED", "REJECTED").contains(string(outcome.get("status")))) {
+                boolean failed = stages.stream().anyMatch(stage -> "REJECTED".equals(stage.get("status")));
+                boolean allPassed = stages.stream().allMatch(stage -> "PASSED".equals(stage.get("status")));
+                boolean waiting = !failed && stages.stream().anyMatch(stage -> "READY".equals(stage.get("status")));
+                if (failed || allPassed || waiting) jdbc.update("UPDATE school_exam_process SET overall_status=?,stage_status=?,process_status_view=? WHERE id=?",
+                        allPassed ? "COMPLETED" : "REJECTED", failed ? "REJECTED" : "PASSED",
+                        failed ? "考试未达到及格线" : allPassed ? "考试已完成" : "复核通过，等待继续考试", processId);
+            }
         }
         auditLogService.log(actor.getId(), actor.getDisplayName(), actor.getRoleCode(), "SCHOOL_EXAM", "REVIEW_SCORE",
                 "INTERVIEW_AI_RECORD", String.valueOf(recordId), "复核分数 " + record.get("oldScore") + " → " + request.getScore());

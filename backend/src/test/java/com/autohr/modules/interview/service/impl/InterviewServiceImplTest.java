@@ -275,6 +275,17 @@ class InterviewServiceImplTest {
     }
 
     @Test
+    void finalStagePassCannotOverrideAnEarlierStageRejectedByReview() {
+        InterviewProcess process = schoolExamProcess("SUBMIT"); process.setAiThresholdScore(60);
+        InterviewProcessStage last = schoolStage(9L, "综合", 2, "IN_PROGRESS");
+        when(processStageMapper.selectCount(any())).thenReturn(1L);
+        ReflectionTestUtils.invokeMethod(service, "completeSchoolExamProcess", process, last, 80);
+        assertEquals("PASSED", last.getStageStatus());
+        assertEquals("REJECTED", process.getOverallStatus());
+        assertEquals("REJECTED", process.getStageStatus());
+    }
+
+    @Test
     void antiCheatNextStageMovesToTheNextAiStageImmediately() {
         InterviewProcess process = schoolExamProcess("NEXT_STAGE");
         InterviewProcessStage current = schoolStage(8L, "基础知识", 1, "IN_PROGRESS");
@@ -306,6 +317,8 @@ class InterviewServiceImplTest {
         when(processMapper.selectById(42L)).thenReturn(process);
         when(recruitmentCandidateMapper.selectSchoolCandidateById(7L)).thenReturn(candidate);
         when(processStageMapper.selectList(any())).thenReturn(List.of(interrupted, later));
+        InterviewAiRecord pending = new InterviewAiRecord(); pending.setId(17L); pending.setQuestionStatus("CANCELLED");
+        when(aiRecordMapper.selectOne(any())).thenReturn(pending);
 
         service.resetSchoolExamProcess(42L, false);
 
@@ -315,6 +328,52 @@ class InterviewServiceImplTest {
         assertEquals("IN_PROGRESS", interrupted.getStageStatus());
         assertEquals("READY", later.getStageStatus());
         verify(processStageMapper).updateById(interrupted);
+        verify(aiRecordMapper).resumeCancelledQuestion(17L);
+    }
+
+    @Test
+    void continuingNaturallyFinishedExamWithoutPendingQuestionIsRejected() {
+        InterviewProcess process = schoolExamProcess("SUBMIT");
+        process.setOverallStatus("COMPLETED"); process.setStageStatus("PASSED");
+        RecruitmentCandidate candidate = new RecruitmentCandidate();
+        candidate.setId(7L); candidate.setGraduationSchool("学校考试系统");
+        when(processMapper.selectById(42L)).thenReturn(process);
+        when(recruitmentCandidateMapper.selectSchoolCandidateById(7L)).thenReturn(candidate);
+        when(processStageMapper.selectList(any())).thenReturn(List.of(schoolStage(8L, "基础", 1, "PASSED")));
+        assertThrows(BusinessException.class, () -> service.resetSchoolExamProcess(42L, false));
+        verify(processMapper, never()).updateById(any(InterviewProcess.class));
+        verify(processStageMapper, never()).updateById(any(InterviewProcessStage.class));
+    }
+
+    @Test
+    void continuingNaturallyFinishedStandardExamWithoutPendingQuestionIsRejected() {
+        InterviewProcess process = schoolExamProcess("SUBMIT");
+        process.setTemplateId(null); process.setOverallStatus("REJECTED"); process.setStageStatus("REJECTED");
+        RecruitmentCandidate candidate = new RecruitmentCandidate();
+        candidate.setId(7L); candidate.setGraduationSchool("学校考试系统");
+        when(processMapper.selectById(42L)).thenReturn(process);
+        when(recruitmentCandidateMapper.selectSchoolCandidateById(7L)).thenReturn(candidate);
+        assertThrows(BusinessException.class, () -> service.resetSchoolExamProcess(42L, false));
+        assertEquals("REJECTED", process.getOverallStatus());
+        verify(processMapper, never()).updateById(any(InterviewProcess.class));
+    }
+
+    @Test
+    void continuingReviewedEarlyFailureStartsTheNextUnstartedStage() {
+        InterviewProcess process = schoolExamProcess("SUBMIT");
+        process.setOverallStatus("REJECTED"); process.setStageStatus("PASSED");
+        RecruitmentCandidate candidate = new RecruitmentCandidate();
+        candidate.setId(7L); candidate.setGraduationSchool("学校考试系统");
+        InterviewProcessStage first = schoolStage(8L, "基础", 1, "PASSED");
+        InterviewProcessStage later = schoolStage(9L, "综合", 2, "READY");
+        when(processMapper.selectById(42L)).thenReturn(process);
+        when(recruitmentCandidateMapper.selectSchoolCandidateById(7L)).thenReturn(candidate);
+        when(processStageMapper.selectList(any())).thenReturn(List.of(first, later));
+        service.resetSchoolExamProcess(42L, false);
+        assertEquals("PASSED", first.getStageStatus());
+        assertEquals("IN_PROGRESS", later.getStageStatus());
+        assertEquals("IN_PROGRESS", process.getOverallStatus());
+        verify(processStageMapper).updateById(later);
     }
 
     @Test

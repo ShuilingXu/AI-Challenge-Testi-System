@@ -1949,6 +1949,7 @@ public class InterviewServiceImpl implements InterviewService {
             process.setVideoApproved(0);
             process.setOnsiteApproved(0);
         }
+        if (!restart && !isTemplateProcess(process)) requireSchoolExamResumePoint(processId, 0L);
         process.setOverallStatus("IN_PROGRESS");
         process.setAntiCheatSwitchCount(0);
         if (isTemplateProcess(process)) {
@@ -1984,6 +1985,17 @@ public class InterviewServiceImpl implements InterviewService {
                                         .max(java.util.Comparator.comparing(InterviewProcessStage::getSequenceNo))
                                         .orElse(first)));
                 if (active == null) throw new BusinessException("考试阶段不存在");
+                if ("PASSED".equals(active.getStageStatus())) {
+                    // A reviewed early rejection may now pass. Resume the next
+                    // unstarted stage, rather than re-opening its completed questions.
+                    int completedSequence = active.getSequenceNo();
+                    active = stages.stream().filter(stage -> "READY".equals(stage.getStageStatus()))
+                            .filter(stage -> stage.getSequenceNo() > completedSequence)
+                            .min(Comparator.comparing(InterviewProcessStage::getSequenceNo)).orElse(null);
+                    if (active == null) throw new BusinessException("考试已完成，没有可继续的答题断点，请使用打回考试");
+                } else {
+                    requireSchoolExamResumePoint(processId, active.getId());
+                }
                 active.setStageStatus("IN_PROGRESS");
                 processStageMapper.updateById(active);
                 process.setCurrentStage(active.getStageType());
@@ -2001,6 +2013,16 @@ public class InterviewServiceImpl implements InterviewService {
             runAfterCommit(() -> generateInitialQuestionSafely(process.getId()));
         }
         return toIntervieweeProcessVO(process);
+    }
+
+    private void requireSchoolExamResumePoint(Long processId, Long stageScopeId) {
+        InterviewAiRecord pending = aiRecordMapper.selectOne(new LambdaQueryWrapper<InterviewAiRecord>()
+                .eq(InterviewAiRecord::getProcessId, processId)
+                .eq(InterviewAiRecord::getStageScopeId, stageScopeId)
+                .ne(InterviewAiRecord::getAnswerStatus, "COMPLETED")
+                .orderByAsc(InterviewAiRecord::getSequenceNo).last("LIMIT 1"));
+        if (pending == null) throw new BusinessException("考试已完成，没有可继续的答题断点，请使用打回考试");
+        if ("CANCELLED".equals(pending.getQuestionStatus())) aiRecordMapper.resumeCancelledQuestion(pending.getId());
     }
 
     private boolean isSwitchEvent(String eventType) {
@@ -2177,9 +2199,12 @@ public class InterviewServiceImpl implements InterviewService {
                 .orderByAsc(InterviewProcessStage::getSequenceNo)
                 .last("LIMIT 1"));
         if (nextStage == null) {
-            process.setOverallStatus("COMPLETED");
-            process.setStageStatus("PASSED");
-            process.setProcessStatusView("考试已完成");
+            boolean failedStage = processStageMapper.selectCount(new LambdaQueryWrapper<InterviewProcessStage>()
+                    .eq(InterviewProcessStage::getProcessId, process.getId())
+                    .eq(InterviewProcessStage::getStageStatus, "REJECTED")) > 0;
+            process.setOverallStatus(failedStage ? "REJECTED" : "COMPLETED");
+            process.setStageStatus(failedStage ? "REJECTED" : "PASSED");
+            process.setProcessStatusView(failedStage ? "考试未达到及格线" : "考试已完成");
             return;
         }
         if (!"AI".equals(nextStage.getStageType())) {
@@ -2767,6 +2792,7 @@ public class InterviewServiceImpl implements InterviewService {
                 InterviewAiRecord existing = aiRecordMapper.selectOne(new LambdaQueryWrapper<InterviewAiRecord>()
                         .eq(InterviewAiRecord::getProcessId, process.getId())
                         .eq(InterviewAiRecord::getStageScopeId, stageScopeId)
+                        .ne(InterviewAiRecord::getAnswerStatus, "COMPLETED")
                         .orderByAsc(InterviewAiRecord::getSequenceNo)
                         .last("LIMIT 1"));
                 if (existing != null) {

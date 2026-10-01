@@ -25,7 +25,7 @@ TABLES = [
     "school_llm_config", "school_exam_template", "school_exam_template_stage",
     "school_exam_process", "school_exam_process_stage", "school_answer_record",
     "school_video_session", "school_exam", "school_exam_attempt",
-    "school_exam_teacher", "school_score_review",
+    "school_exam_teacher", "school_score_review", "school_class_teacher", "school_exam_recording",
 ]
 
 LEGACY_TABLE_NAMES = {
@@ -47,7 +47,7 @@ LEGACY_TABLE_NAMES = {
     "school_video_session": "interview_video_session",
 }
 
-EXPECTED_TABLE_COUNT = 24
+EXPECTED_TABLE_COUNT = 26
 if len(TABLES) != EXPECTED_TABLE_COUNT:
     raise RuntimeError(f"Migration table list must contain {EXPECTED_TABLE_COUNT} tables, got {len(TABLES)}")
 

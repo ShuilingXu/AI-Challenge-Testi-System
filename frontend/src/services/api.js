@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { clearSession, readSessionToken } from '../utils/session'
+import { requestCollection } from '../utils/pagination'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 const request = axios.create({
@@ -91,15 +92,8 @@ function releaseWhenPreviewCloses(popup, objectUrl) {
   return release
 }
 
-const defaultPageParams = { page: 1, pageSize: 200 }
-
 async function requestPage(path, params) {
-  const pageParams = { ...defaultPageParams, ...params }
-  const response = await request.get(path, { params: pageParams })
-  const pagination = response?.data
-  if (Array.isArray(pagination)) return response
-  const items = pagination?.items || []
-  return { ...response, data: items, pagination: { ...pagination, loaded: items.length } }
+  return requestCollection(pageParams => request.get(path, { params: pageParams }), params)
 }
 
 // PostgreSQL folds unquoted SQL aliases to lowercase. Keep the school UI

@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 
 public interface InterviewAiRecordMapper extends BaseMapper<InterviewAiRecord> {
 
+    @Update("UPDATE school_answer_record SET question_status = 'PENDING' WHERE id = #{recordId} AND question_status = 'CANCELLED'")
+    int resumeCancelledQuestion(@Param("recordId") Long recordId);
+
     @Update("UPDATE school_answer_record SET answer_content = #{answerContent}, answer_status = 'PROCESSING', "
             + "answer_processing_token = #{token}, answer_lease_expires_at = #{leaseExpiresAt}, "
             + "answer_processing_attempts = COALESCE(answer_processing_attempts, 0) + 1, answer_error = NULL "

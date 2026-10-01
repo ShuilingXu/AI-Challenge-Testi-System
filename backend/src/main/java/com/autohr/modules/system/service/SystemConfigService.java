@@ -28,6 +28,7 @@ public class SystemConfigService {
     private static final Pattern ENV_KEY_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
     private final Path envPath;
     private final Function<String, String> environmentLookup;
+    private final Map<String, String> savedOverrides = new LinkedHashMap<>();
 
     public SystemConfigService() {
         this(EnvironmentFileBootstrap.defaultEnvPath(), System::getenv);
@@ -46,7 +47,7 @@ public class SystemConfigService {
         Map<String, String> envFile = readEnvFile();
         Map<String, String> result = new LinkedHashMap<>();
         for (String key : keys) {
-            String value = environmentLookup.apply(key);
+            String value = savedOverrides.containsKey(key) ? savedOverrides.get(key) : environmentLookup.apply(key);
             if (value == null) {
                 value = envFile.get(key);
             }
@@ -92,6 +93,9 @@ public class SystemConfigService {
             builder.append(key).append('=').append(serializeValue(sanitizedUpdates.get(key))).append(System.lineSeparator());
         }
         writeEnvFile(builder.toString());
+        // A successful admin save supersedes the environment inherited at startup.
+        // Unedited keys retain the normal environment-before-file precedence.
+        savedOverrides.putAll(sanitizedUpdates);
     }
 
     private Map<String, String> readEnvFile() {

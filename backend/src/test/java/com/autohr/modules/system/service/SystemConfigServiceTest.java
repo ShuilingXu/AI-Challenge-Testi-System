@@ -53,4 +53,17 @@ class SystemConfigServiceTest {
         assertEquals("runtime.example.com", config.get("SMTP_HOST"));
         assertEquals("587", config.get("SMTP_PORT"));
     }
+
+    @Test
+    void savedSettingsOverrideInheritedEnvironmentWithoutChangingUneditedKeys() throws Exception {
+        Path envPath = tempDirectory.resolve("runtime.env");
+        Files.writeString(envPath, "S3_ENABLED=false\nSMTP_HOST=old.example.com\nSMTP_PORT=587\n");
+        Map<String, String> inherited = Map.of("S3_ENABLED", "false", "SMTP_HOST", "old.example.com", "SMTP_PORT", "465");
+        SystemConfigService service = new SystemConfigService(envPath, inherited::get);
+        service.saveConfig(Map.of("S3_ENABLED", "true", "SMTP_HOST", "new.example.com"));
+        assertEquals("true", service.loadConfig("S3_ENABLED").get("S3_ENABLED"));
+        assertEquals("new.example.com", service.loadConfig("SMTP_HOST").get("SMTP_HOST"));
+        assertEquals("465", service.loadConfig("SMTP_PORT").get("SMTP_PORT"));
+        assertEquals("new.example.com", new SystemConfigService(envPath, key -> null).loadConfig("SMTP_HOST").get("SMTP_HOST"));
+    }
 }

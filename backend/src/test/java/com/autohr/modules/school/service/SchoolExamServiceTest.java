@@ -610,6 +610,39 @@ class SchoolExamServiceTest {
     }
 
     @Test
+    void multiStageReviewUsesStageScoresRatherThanOverallAverage() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam_process SET ai_threshold_score=60,stage_status='PASSED' WHERE id=41");
+        jdbc.update("INSERT INTO school_exam_process_stage(id,process_id,stage_name,stage_type,sequence_no,stage_status) VALUES(51,41,'基础','AI',1,'PASSED'),(52,41,'综合','AI',2,'PASSED')");
+        jdbc.update("INSERT INTO school_answer_record(id,process_id,process_stage_id,stage_scope_id,question_content,answer_status,average_score,sequence_no) VALUES(61,41,51,51,'Q1','COMPLETED',100,1),(62,41,52,52,'Q2','COMPLETED',80,1)");
+        SessionUserVO admin = new SessionUserVO(); admin.setId(1L); admin.setRoleCode("SYSTEM_ADMIN");
+        ScoreReviewRequest review = new ScoreReviewRequest(); review.setScore(20);
+        service.reviewScore(62L, review, admin);
+        assertEquals(60, jdbc.queryForObject("SELECT ai_average_score FROM school_exam_process WHERE id=41", Integer.class));
+        assertEquals("REJECTED", jdbc.queryForObject("SELECT overall_status FROM school_exam_process WHERE id=41", String.class));
+        assertEquals("PASSED", jdbc.queryForObject("SELECT stage_status FROM school_exam_process_stage WHERE id=51", String.class));
+        assertEquals("REJECTED", jdbc.queryForObject("SELECT stage_status FROM school_exam_process_stage WHERE id=52", String.class));
+        review.setScore(80); service.reviewScore(62L, review, admin);
+        assertEquals("COMPLETED", jdbc.queryForObject("SELECT overall_status FROM school_exam_process WHERE id=41", String.class));
+    }
+
+    @Test
+    void reviewingEarlyStageFailureLeavesLaterStageReadyForTeacherContinuation() {
+        seedCompletedAttempt();
+        jdbc.update("UPDATE school_exam_process SET ai_threshold_score=60,overall_status='REJECTED',stage_status='REJECTED' WHERE id=41");
+        jdbc.update("INSERT INTO school_exam_process_stage(id,process_id,stage_name,stage_type,sequence_no,stage_status) VALUES(51,41,'基础','AI',1,'REJECTED'),(52,41,'综合','AI',2,'READY')");
+        jdbc.update("INSERT INTO school_answer_record(id,process_id,process_stage_id,stage_scope_id,question_content,answer_status,average_score,sequence_no) VALUES(61,41,51,51,'Q1','COMPLETED',20,1)");
+        SessionUserVO admin = new SessionUserVO(); admin.setId(1L); admin.setRoleCode("SYSTEM_ADMIN");
+        ScoreReviewRequest review = new ScoreReviewRequest(); review.setScore(80);
+        service.reviewScore(61L, review, admin);
+        assertEquals("PASSED", jdbc.queryForObject("SELECT stage_status FROM school_exam_process_stage WHERE id=51", String.class));
+        assertEquals("READY", jdbc.queryForObject("SELECT stage_status FROM school_exam_process_stage WHERE id=52", String.class));
+        assertEquals("REJECTED", jdbc.queryForObject("SELECT overall_status FROM school_exam_process WHERE id=41", String.class));
+        assertEquals("PASSED", jdbc.queryForObject("SELECT stage_status FROM school_exam_process WHERE id=41", String.class));
+        assertEquals("复核通过，等待继续考试", jdbc.queryForObject("SELECT process_status_view FROM school_exam_process WHERE id=41", String.class));
+    }
+
+    @Test
     void monitoringPolicyUsesAttemptSnapshotAndRequiresOwnership() {
         seedCompletedAttempt();
         jdbc.update("UPDATE school_exam_attempt SET camera_enabled=1,screen_recording_enabled=0 WHERE process_id=41");

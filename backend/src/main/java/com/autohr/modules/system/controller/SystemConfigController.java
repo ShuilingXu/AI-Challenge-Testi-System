@@ -83,11 +83,12 @@ public class SystemConfigController {
         systemConfigService.saveConfig(safeUpdates);
         if (interviewService != null) interviewService.reloadSchoolLlmConfig();
         Map<String, String> config = systemConfigService.loadConfig(CONFIG_KEYS);
-        // The inherited systemd environment is immutable; reflect the values
-        // just persisted so the UI does not immediately display stale values.
-        config.putAll(safeUpdates);
         maskSecrets(config);
-        return ApiResponse.success("配置已保存并立即重新加载", config);
+        boolean restartRequired = safeUpdates.keySet().stream().anyMatch(key ->
+                key.startsWith("DB_") || key.equals("JWT_SECRET")
+                        || key.equals("LLM_ALLOW_PRIVATE_ADDRESSES")
+                        || key.startsWith("INTERVIEW_") || key.startsWith("TURN_") || key.startsWith("RESUME_"));
+        return ApiResponse.success(restartRequired ? "配置已保存，数据库、会话或启动配置需重启后端生效" : "配置已保存并立即重新加载", config);
     }
 
     private void mask(Map<String, String> config, String key) {

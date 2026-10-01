@@ -28,7 +28,7 @@ install_owned_file() {
   fi
 }
 
-for command_name in curl java systemctl; do
+for command_name in curl java systemctl python3; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Required command is not installed: $command_name" >&2
     exit 1
@@ -36,7 +36,7 @@ for command_name in curl java systemctl; do
 done
 
 for required_file in "$SOURCE_DIR/backend/auto-hr.jar" "$SOURCE_DIR/start.sh" \
-  "$SOURCE_DIR/auto-hr.service"; do
+  "$SOURCE_DIR/auto-hr.service" "$SOURCE_DIR/prepare-sqlite.py"; do
   if [ ! -s "$required_file" ]; then
     echo "Required release file is missing or empty: $required_file" >&2
     exit 1
@@ -71,7 +71,7 @@ fi
 
 install -d -o root -g "$SERVICE_GROUP" -m 0750 "$INSTALL_DIR" "$INSTALL_DIR/backend"
 install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0700 \
-  "$INSTALL_DIR/uploads" "$INSTALL_DIR/logs" "$CONFIG_DIR"
+  "$INSTALL_DIR/uploads" "$INSTALL_DIR/logs" "$INSTALL_DIR/data" "$CONFIG_DIR"
 install -d -o root -g root -m 0755 "$INSTALL_DIR/frontend"
 
 # Stage the JAR before stopping the current unit so validation failures do not
@@ -80,10 +80,19 @@ install -o root -g "$SERVICE_GROUP" -m 0640 \
   "$SOURCE_DIR/backend/auto-hr.jar" "$INSTALL_DIR/backend/auto-hr.jar.next"
 
 systemctl stop auto-hr 2>/dev/null || true
+if systemctl is-active --quiet auto-hr; then
+  echo "Auto HR is still running; refusing to replace files or relocate its database." >&2
+  exit 1
+fi
 mv -f "$INSTALL_DIR/backend/auto-hr.jar.next" "$INSTALL_DIR/backend/auto-hr.jar"
 install_owned_file "$SOURCE_DIR/start.sh" "$INSTALL_DIR/start.sh" root "$SERVICE_GROUP" 0750
 
 install_owned_file "$ENV_SOURCE" "$CONFIG_DIR/.env" "$SERVICE_USER" "$SERVICE_GROUP" 0600
+python3 "$SOURCE_DIR/prepare-sqlite.py" "$INSTALL_DIR"
+chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/.env"
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/data"
+find "$INSTALL_DIR/data" -type d -exec chmod 0700 {} +
+find "$INSTALL_DIR/data" -type f -exec chmod 0600 {} +
 for settings_name in .site-settings.json .site-content.json; do
   if [ ! -e "$CONFIG_DIR/$settings_name" ] && [ -f "$INSTALL_DIR/$settings_name" ]; then
     install_owned_file "$INSTALL_DIR/$settings_name" "$CONFIG_DIR/$settings_name" "$SERVICE_USER" "$SERVICE_GROUP" 0600

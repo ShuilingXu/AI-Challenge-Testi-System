@@ -39,7 +39,7 @@ The existing staff role codes are retained for data compatibility. `SYSTEM_ADMIN
 
 Exam administrators can assign multiple responsible teachers. When none are assigned, all teaching staff can view the exam. The exam form also controls whether students can see scores during the exam and after it ends.
 
-IT administrators can configure the OpenAI-compatible endpoint, model, default prompt, and per-function prompt overrides at `/admin/settings`. The function overrides cover question/follow-up generation, answer scoring, and learning summaries; leave an override blank to inherit the default prompt. Changes are written to `.env` and take effect after restarting the backend.
+IT administrators can configure the OpenAI-compatible endpoint, model, default prompt, and per-function prompt overrides at `/admin/settings`. The function overrides cover question/follow-up generation, answer scoring, and learning summaries; leave an override blank to inherit the default prompt. Changes are written to `.env` and reload immediately. Database, JWT, and other startup configuration changes require a backend restart, as indicated by the configuration API.
 
 Class import columns, after the header row: `majorName`, `className`, `classCode`, `description`.
 
@@ -125,7 +125,7 @@ Bootstrap administrator accounts are `itadmin`, `hradmin`, and `hruser`. In deve
 
 All state-changing API calls use the `AUTOHR_CSRF` double-submit token. Authentication is JWT-backed and carried by a secure session cookie in production.
 
-The executable release also serves the embedded frontend and its browser history routes. The systemd installer stores writable configuration in `/opt/auto-hr/config/` (mode `0700`), while executable files remain owned by root. `AUTOHR_ENV_PATH` selects the configuration file for both Spring startup and backend edits; local development still defaults to the project `.env`. Installing this release over an older installation migrates its `.env` and existing default site settings into this configuration directory without moving the database or recordings.
+The executable release also serves the embedded frontend and its browser history routes. The systemd installer requires Python 3 and stores writable configuration in `/opt/auto-hr/config/` (mode `0700`), while executable files remain owned by root. `AUTOHR_ENV_PATH` selects the configuration file for both Spring startup and backend edits; local development still defaults to the project `.env`. The default SQLite database uses `/opt/auto-hr/data/school_exam.db`, in a service-owned directory that supports SQLite journals. On upgrade, the installer stops the service and copies a legacy root-level default database through SQLite's backup API (including WAL data), retains the original for recovery, and updates default database URLs. If both default databases already exist, installation stops for manual reconciliation. Explicit custom database URLs are preserved; their database directory must allow the service user to write journals. Recordings retain their existing paths.
 
 ## Verification
 
