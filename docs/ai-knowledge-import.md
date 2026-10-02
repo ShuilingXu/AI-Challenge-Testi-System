@@ -12,8 +12,18 @@
 
 ## API
 
-- `POST /api/interview/hr/knowledge-items/ai/generate`：multipart 参数 `knowledgeBaseId` 和多个 `files`；返回 `data: [{knowledgePoint, knowledgeContent}]`。
-- `POST /api/interview/hr/knowledge-items/ai/save`：JSON `{knowledgeBaseId, items: [{knowledgePoint, knowledgeContent}]}`；返回 `data: {imported}`。
+知识点使用独立的 `knowledgeSource` 来源字段，列表和 AI 预览均显示来源：
+
+- 手动新增：`人工添加 · 手动添加`。
+- CSV 导入：`人工添加 · CSV导入 · 文件名.csv`。
+- Excel 导入：`人工添加 · Excel导入 · 文件名.xls/xlsx`。
+- AI 添加：`AI 添加 · 材料文件名`；引用多份材料时保留多个文件名。
+- 升级前未记录来源的旧条目：`历史数据 · 未记录来源`，不推测来源，也不修改原知识内容。
+
+AI 会单独返回引用的材料文件名，后端仅接受本批上传的文件名；新生成的教学内容不再附加来源文本。模型省略文件引用时，来源回退为该分块实际包含的材料文件名。修改已有条目时不提交来源会保留原来源。
+
+- `POST /api/interview/hr/knowledge-items/ai/generate`：multipart 参数 `knowledgeBaseId` 和多个 `files`；返回 `data: [{knowledgePoint, knowledgeContent, knowledgeSource}]`。
+- `POST /api/interview/hr/knowledge-items/ai/save`：JSON `{knowledgeBaseId, items: [{knowledgePoint, knowledgeContent, knowledgeSource}]}`；返回 `data: {imported}`。
 
 ## 验证
 

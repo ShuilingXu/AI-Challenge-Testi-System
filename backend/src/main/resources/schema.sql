@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS school_knowledge_item (
     knowledge_base_id INTEGER NOT NULL,
     knowledge_point VARCHAR(255) NOT NULL,
     knowledge_content VARCHAR(5000) NOT NULL,
+    knowledge_source VARCHAR(2000) NOT NULL DEFAULT '历史数据 · 未记录来源',
     status INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

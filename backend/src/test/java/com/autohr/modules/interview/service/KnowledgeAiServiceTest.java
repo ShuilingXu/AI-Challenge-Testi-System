@@ -41,6 +41,7 @@ class KnowledgeAiServiceTest {
         assertEquals(1, service.save(7L, List.of(new KnowledgeAiService.Item(" 循环 ", " 内容 "))));
         verify(interview).saveKnowledgeItem(argThat(item -> item.getId() == null && item.getKnowledgeBaseId().equals(7L)
                 && item.getKnowledgePoint().equals("循环") && item.getKnowledgeContent().equals("内容") && item.getStatus() == 1));
+        verify(interview).saveKnowledgeItem(argThat(item -> "AI 添加 · 未记录文件名".equals(item.getKnowledgeSource())));
     }
 
     @Test void processesAllChunksAndMergesRepeatedPointsWithoutWritingDuringGeneration() throws Exception {
@@ -62,6 +63,7 @@ class KnowledgeAiServiceTest {
             var result = service.generate(7L, List.of(new MockMultipartFile("files", "大纲.txt", "text/plain", "课".repeat(24001).getBytes(StandardCharsets.UTF_8))));
             assertEquals(3, calls.get()); assertEquals(1, result.size());
             assertEquals("材料内容1\n材料内容2\n材料内容3", result.get(0).knowledgeContent());
+            assertEquals("AI 添加 · 大纲.txt", result.get(0).knowledgeSource());
             verifyNoInteractions(interview);
         } finally { server.stop(0); }
     }
@@ -72,6 +74,17 @@ class KnowledgeAiServiceTest {
         when(config.loadConfig("SCHOOL_LLM_BASE_URL", "SCHOOL_LLM_API_KEY", "SCHOOL_LLM_MODEL")).thenReturn(Map.of());
         assertThrows(BusinessException.class, () -> service.generate(7L, List.of(new MockMultipartFile("files", "大纲.txt", "text/plain", new byte[]{1}))));
         verifyNoInteractions(interview);
+    }
+
+    @Test void mapsOnlyUploadedSourceFilesIntoSeparateSourceField() throws Exception {
+        String response = "{\"items\":[{\"knowledgePoint\":\"循环\",\"knowledgeContent\":\"循环教学内容\",\"sourceFiles\":[\"课件.pptx\",\"课件.pptx\"]}]}";
+        var item = service.parse(response, List.of("大纲.docx", "课件.pptx")).get(0);
+        assertEquals("AI 添加 · 课件.pptx", item.knowledgeSource());
+        assertEquals("循环教学内容", item.knowledgeContent());
+        assertThrows(BusinessException.class, () -> service.parse(response, List.of("其他.txt")));
+        existingBase();
+        service.save(7L, List.of(item));
+        verify(interview).saveKnowledgeItem(argThat(request -> "AI 添加 · 课件.pptx".equals(request.getKnowledgeSource())));
     }
 
     @Test void rollsBackEntireBatchWhenAnExistingSaveRuleRejectsAnItem(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {

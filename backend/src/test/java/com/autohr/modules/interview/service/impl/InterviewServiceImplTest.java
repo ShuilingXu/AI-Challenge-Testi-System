@@ -48,6 +48,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import static org.mockito.ArgumentMatchers.argThat;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -727,7 +728,38 @@ class InterviewServiceImplTest {
         var request = new com.autohr.modules.interview.dto.KnowledgeItemSaveRequest();
         request.setKnowledgeBaseId(7L); request.setKnowledgePoint("原子性"); request.setKnowledgeContent("事务全部完成或全部回滚");
         assertEquals(request.getKnowledgeContent(), service.saveKnowledgeItem(request).getKnowledgeContent());
-        verify(knowledgeItemMapper).insert(any(com.autohr.modules.interview.entity.InterviewKnowledgeItem.class));
+        verify(knowledgeItemMapper).insert(argThat(item -> "人工添加 · 手动添加".equals(item.getKnowledgeSource())));
+    }
+
+    @Test
+    void editingKnowledgeWithoutSourcePreservesOriginalProvenance() {
+        var base = new InterviewKnowledgeBase(); base.setId(7L);
+        when(knowledgeBaseMapper.selectById(7L)).thenReturn(base);
+        var entity = new com.autohr.modules.interview.entity.InterviewKnowledgeItem();
+        entity.setId(9L); entity.setKnowledgeBaseId(7L); entity.setKnowledgeSource("AI 添加 · 大纲.docx");
+        when(knowledgeItemMapper.selectById(9L)).thenReturn(entity);
+        var request = new com.autohr.modules.interview.dto.KnowledgeItemSaveRequest();
+        request.setId(9L); request.setKnowledgeBaseId(7L); request.setKnowledgePoint("循环"); request.setKnowledgeContent("编辑后的教学内容");
+        assertEquals("AI 添加 · 大纲.docx", service.saveKnowledgeItem(request).getKnowledgeSource());
+    }
+
+    @Test
+    void csvAndExcelImportsRecordFormatAndActualFilename() throws Exception {
+        var base = new InterviewKnowledgeBase(); base.setId(7L);
+        when(knowledgeBaseMapper.selectById(7L)).thenReturn(base);
+        var csv = new MockMultipartFile("file", "参考材料.csv", "text/csv", "知识点,知识内容,状态\n循环,循环教学内容,1".getBytes(StandardCharsets.UTF_8));
+        assertEquals(1, service.importKnowledgeItems(7L, csv));
+        verify(knowledgeItemMapper).insert(argThat(item -> "人工添加 · CSV导入 · 参考材料.csv".equals(item.getKnowledgeSource())));
+        var output = new java.io.ByteArrayOutputStream();
+        try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            var header = sheet.createRow(0); header.createCell(0).setCellValue("知识点"); header.createCell(1).setCellValue("知识内容");
+            var row = sheet.createRow(1); row.createCell(0).setCellValue("函数"); row.createCell(1).setCellValue("函数教学内容");
+            workbook.write(output);
+        }
+        var excel = new MockMultipartFile("file", "教学参考.xlsx", "application/octet-stream", output.toByteArray());
+        assertEquals(1, service.importKnowledgeItems(7L, excel));
+        verify(knowledgeItemMapper).insert(argThat(item -> "人工添加 · Excel导入 · 教学参考.xlsx".equals(item.getKnowledgeSource())));
     }
 
     @Test

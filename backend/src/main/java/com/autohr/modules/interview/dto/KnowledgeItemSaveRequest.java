@@ -16,5 +16,7 @@ public class KnowledgeItemSaveRequest {
     @NotBlank(message = "知识内容必填")
     @Size(max = 5000, message = "知识内容不能超过5000个字符")
     private String knowledgeContent;
+    @Size(max = 2000, message = "来源不能超过2000个字符")
+    private String knowledgeSource;
     private Integer status;
 }

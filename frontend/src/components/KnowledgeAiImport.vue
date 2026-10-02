@@ -13,6 +13,7 @@
       <div class="draft-list">
         <div v-for="(item, index) in draft" :key="index" class="draft-item">
           <el-input v-model="item.knowledgePoint" placeholder="知识点" maxlength="255" show-word-limit :disabled="busy" />
+          <p class="source">来源：{{ item.knowledgeSource || 'AI 添加 · 未记录文件名' }}</p>
           <el-input v-model="item.knowledgeContent" type="textarea" :rows="3" placeholder="教学内容" maxlength="5000" show-word-limit :disabled="busy" />
           <el-button text type="danger" :disabled="busy" @click="draft.splice(index, 1)">移除</el-button>
         </div>

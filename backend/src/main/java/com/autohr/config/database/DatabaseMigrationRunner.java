@@ -91,6 +91,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 migrateInterviewLlmConfigColumns(connection, statement);
                 migrateRecruitmentJobColumns(connection, statement);
                 migrateSchoolExamColumns(connection, statement);
+                addColumnIfMissing(connection, statement, "school_knowledge_item", "knowledge_source",
+                        "VARCHAR(2000) NOT NULL DEFAULT '历史数据 · 未记录来源'");
                 migrateSysUserColumns(connection, statement);
                 migrateReferentialIntegrityConstraints(connection, statement);
                 assertNoDuplicateBusinessKeys(statement);

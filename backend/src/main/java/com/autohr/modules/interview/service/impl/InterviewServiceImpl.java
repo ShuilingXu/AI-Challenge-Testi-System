@@ -349,7 +349,10 @@ public class InterviewServiceImpl implements InterviewService {
         rejectPromptInjection(request.getKnowledgePoint(), request.getKnowledgeContent(), 0);
         requireKnowledgeBase(request.getKnowledgeBaseId());
         InterviewKnowledgeItem entity = request.getId() == null ? new InterviewKnowledgeItem() : requireKnowledgeItem(request.getId());
+        String existingSource = entity.getKnowledgeSource();
         BeanUtils.copyProperties(request, entity);
+        entity.setKnowledgeSource(StrUtil.blankToDefault(request.getKnowledgeSource(),
+                StrUtil.blankToDefault(existingSource, "人工添加 · 手动添加")));
         entity.setStatus(Objects.requireNonNullElse(request.getStatus(), 1));
         if (request.getId() == null) {
             knowledgeItemMapper.insert(entity);
@@ -386,6 +389,7 @@ public class InterviewServiceImpl implements InterviewService {
             entity.setKnowledgeBaseId(knowledgeBaseId);
             entity.setKnowledgePoint(row.point());
             entity.setKnowledgeContent(row.content());
+            entity.setKnowledgeSource(knowledgeImportSource("CSV", file));
             entity.setStatus(row.status());
             knowledgeItemMapper.insert(entity);
         });
@@ -426,6 +430,7 @@ public class InterviewServiceImpl implements InterviewService {
                 entity.setKnowledgeBaseId(knowledgeBaseId);
                 entity.setKnowledgePoint(point);
                 entity.setKnowledgeContent(content);
+                entity.setKnowledgeSource(knowledgeImportSource("Excel", file));
                 entity.setStatus(parseCsvStatus(excelCell(row, 2)));
                 knowledgeItemMapper.insert(entity);
                 imported++;
@@ -445,6 +450,13 @@ public class InterviewServiceImpl implements InterviewService {
         if (type == CellType.NUMERIC) return BigDecimal.valueOf(cell.getNumericCellValue()).stripTrailingZeros().toPlainString();
         if (type == CellType.BOOLEAN) return Boolean.toString(cell.getBooleanCellValue());
         return "";
+    }
+
+    private String knowledgeImportSource(String format, MultipartFile file) {
+        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "未记录文件名").replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1);
+        if (name.length() > 255) throw new BusinessException("文件名不能超过255个字符");
+        return "人工添加 · " + format + "导入 · " + name;
     }
 
     private int forEachKnowledgeCsvRow(MultipartFile file, Consumer<KnowledgeCsvRow> consumer) {
@@ -3867,6 +3879,7 @@ public class InterviewServiceImpl implements InterviewService {
         vo.setKnowledgeBaseId(entity.getKnowledgeBaseId());
         vo.setKnowledgePoint(entity.getKnowledgePoint());
         vo.setKnowledgeContent(entity.getKnowledgeContent());
+        vo.setKnowledgeSource(StrUtil.blankToDefault(entity.getKnowledgeSource(), "历史数据 · 未记录来源"));
         vo.setStatus(entity.getStatus());
         vo.setCreatedAt(entity.getCreatedAt());
         vo.setUpdatedAt(entity.getUpdatedAt());

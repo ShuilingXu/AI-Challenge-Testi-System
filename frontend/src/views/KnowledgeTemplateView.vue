@@ -20,7 +20,7 @@
           </section>
           <section v-if="selectedBase" class="panel items"><div class="panel-head"><div><h2>{{ selectedBase.knowledgeBaseName }} 条目</h2><p>Excel 列：知识点、知识内容、状态。</p></div><div class="import-actions"><KnowledgeAiImport :base="selectedBase" @saved="refreshAiItems" /><el-button @click="downloadItemsTemplate">下载 XLS 模板</el-button><el-upload :show-file-list="false" accept=".xls,.xlsx,.csv" :http-request="importItems"><el-button>批量导入知识点</el-button></el-upload></div></div>
             <div class="item-form"><el-input v-model="itemForm.knowledgePoint" placeholder="知识点" /><el-input v-model="itemForm.knowledgeContent" type="textarea" :rows="2" placeholder="教学材料或预期证据" /><el-button type="primary" @click="saveItem">添加条目</el-button></div>
-            <el-table :data="items" max-height="340"><el-table-column prop="knowledgePoint" label="知识点" width="240" /><el-table-column prop="knowledgeContent" label="内容" /></el-table>
+            <el-table :data="items" max-height="340"><el-table-column prop="knowledgePoint" label="知识点" width="240" /><el-table-column prop="knowledgeContent" label="内容" /><el-table-column prop="knowledgeSource" label="来源" min-width="220" /></el-table>
           </section>
         </el-tab-pane>
         <el-tab-pane label="人工智能考试模板" name="templates">

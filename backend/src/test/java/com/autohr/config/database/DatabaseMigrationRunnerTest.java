@@ -13,6 +13,25 @@ class DatabaseMigrationRunnerTest {
     @TempDir Path directory;
 
     @Test
+    void upgradesKnowledgeSourceWithoutChangingHistoricalContentAndRunsIdempotently() throws Exception {
+        String url = "jdbc:sqlite:" + directory.resolve("knowledge-source.db");
+        var source = new DriverManagerDataSource(url);
+        var jdbc = new JdbcTemplate(source);
+        var runner = new DatabaseMigrationRunner(source,
+                new ActiveDatabase(DatabaseType.SQLITE, url, "", "", false), new AppMigrationProperties());
+        runner.run();
+        jdbc.update("INSERT INTO school_knowledge_base(id,knowledge_base_name,tech_category,job_category) VALUES(7,'教学知识库','计算机','程序设计')");
+        jdbc.update("INSERT INTO school_knowledge_item(id,knowledge_base_id,knowledge_point,knowledge_content) VALUES(9,7,'循环','历史教学内容')");
+        jdbc.execute("ALTER TABLE school_knowledge_item DROP COLUMN knowledge_source");
+        runner.run();
+        assertEquals("历史数据 · 未记录来源", jdbc.queryForObject("SELECT knowledge_source FROM school_knowledge_item WHERE id=9", String.class));
+        jdbc.update("UPDATE school_knowledge_item SET knowledge_source='AI 添加 · 大纲.docx' WHERE id=9");
+        runner.run();
+        assertEquals("AI 添加 · 大纲.docx", jdbc.queryForObject("SELECT knowledge_source FROM school_knowledge_item WHERE id=9", String.class));
+        assertEquals("历史教学内容", jdbc.queryForObject("SELECT knowledge_content FROM school_knowledge_item WHERE id=9", String.class));
+    }
+
+    @Test
     void renamesLegacyTableWithoutLosingRowsAndCanRunAgain() throws Exception {
         String url = "jdbc:sqlite:" + directory.resolve("legacy.db");
         DriverManagerDataSource source = new DriverManagerDataSource(url);

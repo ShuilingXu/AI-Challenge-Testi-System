@@ -25,6 +25,7 @@ public class InterviewVO {
     private String jobCategory;
     private String knowledgePoint;
     private String knowledgeContent;
+    private String knowledgeSource;
     private Integer weight;
 
     private String configName;
