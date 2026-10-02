@@ -18,7 +18,7 @@
               <el-table :data="bases" height="360" @row-click="selectBase"><el-table-column prop="knowledgeBaseName" label="名称" /><el-table-column prop="techCategory" label="学科" /><el-table-column prop="jobCategory" label="课程" /><el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column></el-table>
             </section>
           </section>
-          <section v-if="selectedBase" class="panel items"><div class="panel-head"><div><h2>{{ selectedBase.knowledgeBaseName }} 条目</h2><p>Excel 列：知识点、知识内容、状态。</p></div><div class="import-actions"><el-button @click="downloadItemsTemplate">下载 XLS 模板</el-button><el-upload :show-file-list="false" accept=".xls,.xlsx,.csv" :http-request="importItems"><el-button>批量导入知识点</el-button></el-upload></div></div>
+          <section v-if="selectedBase" class="panel items"><div class="panel-head"><div><h2>{{ selectedBase.knowledgeBaseName }} 条目</h2><p>Excel 列：知识点、知识内容、状态。</p></div><div class="import-actions"><KnowledgeAiImport :base="selectedBase" @saved="refreshAiItems" /><el-button @click="downloadItemsTemplate">下载 XLS 模板</el-button><el-upload :show-file-list="false" accept=".xls,.xlsx,.csv" :http-request="importItems"><el-button>批量导入知识点</el-button></el-upload></div></div>
             <div class="item-form"><el-input v-model="itemForm.knowledgePoint" placeholder="知识点" /><el-input v-model="itemForm.knowledgeContent" type="textarea" :rows="2" placeholder="教学材料或预期证据" /><el-button type="primary" @click="saveItem">添加条目</el-button></div>
             <el-table :data="items" max-height="340"><el-table-column prop="knowledgePoint" label="知识点" width="240" /><el-table-column prop="knowledgeContent" label="内容" /></el-table>
           </section>
@@ -57,6 +57,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowUp, Delete, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AdminNav from '../components/AdminNav.vue'
+import KnowledgeAiImport from '../components/KnowledgeAiImport.vue'
 import { interviewApi } from '../services/api'
 
 const tab = ref('knowledge')
@@ -75,6 +76,7 @@ function removeTemplateStage(index) { if (templateForm.stages.length > 1) templa
 function moveTemplateStage(index, offset) { const target = index + offset; if (target < 0 || target >= templateForm.stages.length) return; const [stage] = templateForm.stages.splice(index, 1); templateForm.stages.splice(target, 0, stage) }
 function templateStageSummary(template) { return (template.stages || []).map((stage, index) => `${index + 1}. ${stage.stageName || '未命名阶段'}`).join(' -> ') || '未设置' }
 async function loadBases() { try { bases.value = (await interviewApi.listKnowledgeBases()).data || [] } catch (error) { fail(error) } }
+async function refreshAiItems(baseId) { if (selectedBase.value?.id === baseId) await selectBase(selectedBase.value) }
 async function loadTemplates() { try { templates.value = (await interviewApi.listProcessTemplates()).data || [] } catch (error) { fail(error) } }
 async function selectBase(base) { selectedBase.value = base; Object.assign(baseForm, base); try { items.value = (await interviewApi.listKnowledgeItems({ knowledgeBaseId: base.id })).data || [] } catch (error) { fail(error) } }
 async function saveBase() { try { const saved = (await interviewApi.saveKnowledgeBase({ ...baseForm })).data; await loadBases(); await selectBase(saved); ElMessage.success('知识库已保存') } catch (error) { fail(error) } }

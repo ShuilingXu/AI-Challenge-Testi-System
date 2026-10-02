@@ -69,6 +69,7 @@
       <section v-else class="analytics">
         <div class="filter-band"><el-select v-model="analyticsFilter.examId" clearable placeholder="全部考试" @change="loadAnalytics"><el-option v-for="item in exams" :key="item.id" :label="item.examName" :value="item.id" /></el-select><el-select v-model="analyticsFilter.classId" clearable placeholder="全部班级" @change="loadAnalytics"><el-option v-for="item in classes" :key="item.id" :label="item.className" :value="item.id" /></el-select></div>
         <div class="metric-row"><article><span>参与考生</span><strong>{{ analytics.studentCount || 0 }}</strong><small>已完成 {{ analytics.completedStudentCount || 0 }}</small></article><article><span>已完成平均得分率</span><strong>{{ analytics.scoreRate || 0 }}%</strong></article><article><span>已完成平均失分率</span><strong>{{ analytics.lossRate || 0 }}%</strong></article><article><span>覆盖考试</span><strong>{{ analytics.examCount || 0 }}</strong></article></div>
+        <ScoreStatisticsPanel :statistics="analytics.statistics" />
         <section class="analysis-band"><h2>人工智能学情总结</h2><p>{{ analytics.aiSummary || '暂无已完成答题数据。' }}</p></section>
         <section class="knowledge-table"><div class="panel-head"><h2>知识点掌握情况</h2></div><el-table :data="analytics.knowledgePoints || []"><el-table-column prop="knowledgePoint" label="知识点" /><el-table-column label="得分率"><template #default="{ row }"><el-progress :percentage="row.scoreRate" :stroke-width="10" /></template></el-table-column><el-table-column prop="lossRate" label="失分率" width="120"><template #default="{ row }">{{ row.lossRate }}%</template></el-table-column><el-table-column prop="rounds" label="有效答题数" width="120" /></el-table></section>
         <section class="knowledge-table"><div class="panel-head"><h2>考生答题记录</h2></div><el-table :data="analytics.students || []" max-height="360"><el-table-column prop="studentNo" label="学号" /><el-table-column prop="fullName" label="姓名" /><el-table-column prop="examName" label="考试" /><el-table-column prop="className" label="班级" /><el-table-column prop="overallStatus" label="状态" width="100"><template #default="{ row }"><el-tag :type="row.overallStatus === 'COMPLETED' ? 'success' : row.overallStatus === 'IN_PROGRESS' ? 'warning' : 'danger'">{{ attemptStatusLabel(row.overallStatus) }}</el-tag></template></el-table-column><el-table-column label="切屏" width="90"><template #default="{ row }">{{ row.antiCheatSwitchCount || 0 }} 次</template></el-table-column><el-table-column prop="answeredRounds" label="已答" width="72" /><el-table-column prop="scoreRate" label="得分率" width="96"><template #default="{ row }">{{ ['COMPLETED','REJECTED'].includes(row.overallStatus) ? `${row.scoreRate}%` : '-' }}</template></el-table-column><el-table-column label="操作" width="230" fixed="right"><template #default="{ row }"><div class="attempt-actions"><el-button text type="primary" @click="openAttempt(row)">查看记录</el-button><el-button v-if="row.overallStatus !== 'IN_PROGRESS'" text type="warning" @click="continueAttempt(row)">继续考试</el-button><el-button v-if="row.overallStatus !== 'IN_PROGRESS'" text type="danger" @click="restartAttempt(row)">打回考试</el-button></div></template></el-table-column></el-table></section>
@@ -91,6 +92,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import AdminNav from '../components/AdminNav.vue'
+import ScoreStatisticsPanel from '../components/ScoreStatisticsPanel.vue'
 import { interviewApi, schoolApi } from '../services/api'
 import { readSessionUser } from '../utils/session'
 
@@ -192,7 +194,16 @@ async function downloadClassesTemplate() { try { downloadBlob(await schoolApi.do
 async function downloadStudentsTemplate() { try { downloadBlob(await schoolApi.downloadStudentsTemplate(), 'students-import-template.xls') } catch (error) { fail(error) } }
 async function importClasses({ file }) { try { const result = (await schoolApi.importClasses(file)).data; ElMessage.success(`班级导入完成：成功 ${result.successCount}，失败 ${result.failureCount}`); await loadClasses() } catch (error) { fail(error) } }
 async function importStudents({ file }) { try { const result = (await schoolApi.importStudents(file)).data; ElMessage.success(`学生导入完成：成功 ${result.successCount}，失败 ${result.failureCount}`); await loadStudents() } catch (error) { fail(error) } }
-async function loadAnalytics() { loading.value = true; try { Object.assign(analytics, (await schoolApi.analytics({ ...analyticsFilter })).data) } catch (error) { fail(error) } finally { loading.value = false } }
+let analyticsRequestId = 0
+async function loadAnalytics() {
+  const requestId = ++analyticsRequestId
+  loading.value = true
+  try {
+    const response = await schoolApi.analytics({ ...analyticsFilter })
+    if (requestId === analyticsRequestId) Object.assign(analytics, response.data)
+  } catch (error) { if (requestId === analyticsRequestId) fail(error) }
+  finally { if (requestId === analyticsRequestId) loading.value = false }
+}
 async function openAttempt(row) {
   const processId = row?.processId ?? row?.processid ?? row?.process_id
   if (processId == null || processId === '') { fail(new Error('答题记录缺少流程编号，请刷新后重试')); return }

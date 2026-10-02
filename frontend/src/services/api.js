@@ -248,6 +248,13 @@ export const interviewApi = {
   getRuntimeConfig() { return request.get('/interview/runtime-config') },
   getIceServers() { return request.get('/interview/ice-servers') },
   saveKnowledgeBase(payload) { return request.post('/interview/hr/knowledge-bases', payload) },
+  generateKnowledgeFromMaterials(knowledgeBaseId, files) {
+    const formData = new FormData()
+    formData.append('knowledgeBaseId', knowledgeBaseId)
+    files.forEach(file => formData.append('files', file))
+    return request.post('/interview/hr/knowledge-items/ai/generate', formData, { timeout: 480000 })
+  },
+  saveAiKnowledgeItems(payload) { return request.post('/interview/hr/knowledge-items/ai/save', payload) },
   listKnowledgeBases(params) { return requestPage('/interview/hr/knowledge-bases', params) },
   deleteKnowledgeBase(id) { return request.post(`/interview/hr/knowledge-bases/${id}/delete`) },
   saveKnowledgeItem(payload) { return request.post('/interview/hr/knowledge-items', payload) },

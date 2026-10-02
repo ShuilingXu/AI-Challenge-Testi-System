@@ -457,6 +457,10 @@ class SchoolExamServiceTest {
         assertEquals(40, analytics.get("scoreRate"));
         assertEquals(60, analytics.get("lossRate"));
         assertEquals(40, rows(analytics.get("knowledgePoints")).get(0).get("scoreRate"));
+        Map<?, ?> statistics = (Map<?, ?>) analytics.get("statistics");
+        assertEquals(1, statistics.get("sampleCount"));
+        assertEquals(40d, ((Map<?, ?>) statistics.get("description")).get("mean"));
+        assertEquals(0d, ((Map<?, ?>) statistics.get("rates")).get("pass"));
     }
 
     @Test
@@ -489,6 +493,7 @@ class SchoolExamServiceTest {
         assertEquals(80, analytics.get("scoreRate"));
         assertEquals(20, analytics.get("lossRate"));
         assertEquals(2, rows(analytics.get("students")).size());
+        assertEquals(1, ((Map<?, ?>) analytics.get("statistics")).get("sampleCount"));
     }
 
     @Test

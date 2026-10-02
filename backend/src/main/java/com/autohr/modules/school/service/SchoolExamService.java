@@ -547,7 +547,7 @@ public class SchoolExamService {
     public Map<String, Object> analytics(Long examId, Long classId, SessionUserVO actor) {
         String sql = "SELECT a.id,a.exam_id AS examId,a.student_id AS studentId,a.process_id AS processId,e.exam_name AS examName, "
                 + "s.student_no AS studentNo,s.full_name AS fullName,c.class_name AS className,c.major_name AS majorName, "
-                + "p.ai_average_score AS averageScore,p.overall_status AS overallStatus,p.stage_status AS stageStatus,"
+                + "e.passing_score AS passingScore,p.ai_average_score AS averageScore,p.overall_status AS overallStatus,p.stage_status AS stageStatus,"
                 + "p.anti_cheat_switch_count AS antiCheatSwitchCount "
                 + "FROM school_exam_attempt a JOIN school_exam e ON e.id=a.exam_id JOIN school_student s ON s.id=a.student_id "
                 + "JOIN school_class c ON c.id=s.class_id JOIN school_exam_process p ON p.id=a.process_id WHERE 1=1";
@@ -562,9 +562,11 @@ public class SchoolExamService {
         List<Map<String, Object>> teacherNotes = new ArrayList<>();
         int scoreTotal = 0;
         int completedCount = 0;
+        List<ScoreStatistics.Sample> samples = new ArrayList<>();
         for (Map<String, Object> attempt : attempts) {
+            List<Map<String, Object>> scoredItems = new ArrayList<>();
             Map<String, Object> analysis = buildAnalysis(attempt, false,
-                    isFinishedAttempt(attempt) ? feedbackRecords : null);
+                    isFinishedAttempt(attempt) ? feedbackRecords : null, scoredItems);
             attempt.put("scoreRate", analysis.get("scoreRate"));
             attempt.put("lossRate", analysis.get("lossRate"));
             attempt.put("aiSummary", analysis.get("aiSummary"));
@@ -577,6 +579,7 @@ public class SchoolExamService {
                 continue;
             }
             completedCount++;
+            samples.add(new ScoreStatistics.Sample(attempt, scoredItems));
             scoreTotal += integer(analysis.get("scoreRate"));
             for (Map<String, Object> point : castRows(analysis.get("knowledgePoints"))) {
                 String name = string(point.get("knowledgePoint"));
@@ -598,6 +601,7 @@ public class SchoolExamService {
         response.put("lossRate", 100 - scoreRate);
         response.put("knowledgePoints", pointRows);
         response.put("students", students);
+        response.put("statistics", ScoreStatistics.calculate(samples));
         response.put("aiSummary", createInsight("班级考试", scoreRate, pointRows,
                 pointRows.stream().mapToInt(point -> integer(point.get("rounds"))).sum(), feedbackRecords, teacherNotes));
         return response;
@@ -865,9 +869,15 @@ public class SchoolExamService {
 
     private Map<String, Object> buildAnalysis(Map<String, Object> attempt, boolean generateAi,
                                                List<Map<String, Object>> feedbackRecords) {
+        return buildAnalysis(attempt, generateAi, feedbackRecords, null);
+    }
+
+    private Map<String, Object> buildAnalysis(Map<String, Object> attempt, boolean generateAi,
+                                            List<Map<String, Object>> feedbackRecords, List<Map<String, Object>> scoredItems) {
         Long processId = number(attempt.get("processId"));
-        List<Map<String, Object>> records = jdbc.queryForList("SELECT COALESCE(NULLIF(knowledge_point,''),'未分类') AS knowledgePoint, average_score AS averageScore, interviewer_comment AS feedback,teacher_note AS teacherNote "
+        List<Map<String, Object>> records = jdbc.queryForList("SELECT question_content AS questionContent,COALESCE(NULLIF(knowledge_point,''),'未分类') AS knowledgePoint, average_score AS averageScore, interviewer_comment AS feedback,teacher_note AS teacherNote "
                 + "FROM school_answer_record WHERE process_id=? AND answer_status='COMPLETED' ORDER BY sequence_no", processId);
+        if (scoredItems != null) scoredItems.addAll(records);
         if (feedbackRecords != null) {
             records.stream().filter(record -> !string(record.get("feedback")).isBlank()).forEach(record -> {
                 feedbackRecords.add(record);
